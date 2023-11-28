@@ -17,10 +17,10 @@ class FundaPipeline:
 class JsonWriterPipeline:
     global firstline
     firstline = True
-    
+
     def open_spider(self, spider):
         now = self.now()
-        self.file = open(f"{now}--output.json", 'w')
+        self.file = open(f".\data\{now}.json", 'w')
         self.file.write("[\n")
 
     def close_spider(self, spider):
