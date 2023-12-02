@@ -3,7 +3,7 @@ import re
 
 class spider(scrapy.Spider):
     name = "het_fundamannetje"
-    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&search_result=53"]
+    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&search_result=1"]
  
     def parse(self, response):
 
@@ -26,7 +26,8 @@ class spider(scrapy.Spider):
             next_page = page.group(1) + str(int(page.group(2))+1)
 
             # bezoek en parseer de volgende pagina
-            yield scrapy.Request(url=next_page, callback=self.parse)
+            if int(page.group(2)+1) < 4:
+                yield scrapy.Request(url=next_page, callback=self.parse)
 
     def parsehuis(self, response):
         # de elementen die adres, postcode en prijs geven staan niet tussen de kenmerkenlijst
@@ -69,17 +70,3 @@ class spider(scrapy.Spider):
     #         yield scrapy.Request(url=r'https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D', callback=self.parse_data)
     #     else:
     #         self.log("Login failed")
-
-
-# TODO "prijs op aanvraag" als prijs
-
-# TODO 403 errors 
-# geduld? -> ja
-    # hoeveel geduld?
-
-# TODO geen resultaten gevonden
-
-# TODO 
-# parse tilburg
-# sla op
-# denk na over hoe het aanbod per dag kunt vergelijken
