@@ -24,9 +24,8 @@ class spider(scrapy.Spider):
             page = re.match(r"(.*search_result=)(\d+)",
                                 response.url)
             next_page = page.group(1) + str(int(page.group(2))+1)
-
             # bezoek en parseer de volgende pagina
-            if int(page.group(2)+1) < 4:
+            if int(page.group(2))+1 <  3:
                 yield scrapy.Request(url=next_page, callback=self.parse)
 
     def parsehuis(self, response):
@@ -34,12 +33,13 @@ class spider(scrapy.Spider):
         adres = response.css("span.object-header__title::text").get()
         postcodeEnStad = response.css("span.object-header__subtitle::text")
         postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w")[0]
-        postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w (\w+)")[0]
+        stad = response.css("span.object-header__subtitle::text").re("\d{4} \w\w (.*)")[0]
         kenmerken = { 
                 "datescraped": datetime.now(),
                 "url" : response.url,
-                "Adres": adres,
-                "Postcode" : postcode,
+                "adres": adres,
+                "stad" : stad,
+                "postcode" : postcode,
               }
         
         # bevat alle kenmerken van het huis

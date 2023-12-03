@@ -6,6 +6,7 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
+from asgiref.sync import sync_to_async
 import json
 from datetime import datetime
 import re
@@ -14,24 +15,43 @@ import sys
 # Add the path to the directory containing your Django project
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web.web.settings")
-django.setup()
+os.environ['DJANGO_SETTINGS_MODULE'] = 'project.settings'  # Replace with your actual project's settings module
 
-from web.woonitor.models import Listing
+import django
+django.setup()
+    
+from woonitor.models import Listing
 
 class FundaPipeline:
     def process_item(self, item, spider):
         return item
     
 class webPipeLine:
+    def convertInt(self, number)->int:
+        """removes anything that is not a number and converts to integer"""
+        return int(re.sub(r"\D","",number))
+    
+    def controlInt(self, dict, key)-> int:
+        """Returns 0 if entry cannot be converted"""
+        try: 
+            return self.convertInt(dict[key])
+        except:
+            return 0
+    
+    @sync_to_async
     def process_item(self, item, spider):
         myListing = Listing(
             url = item['url'], 
-            adres = item['adres'],
+            adres = item['adres'].strip(),
             postcode = item['postcode'],
-            stad= item['stad']
+            stad= item['stad'].strip(),
+            buurt = "???",
+            oppervlakte = self.controlInt(item, 'Oppervlakte'),
+            vraagprijs = self.controlInt(item, 'Vraagprijs'),
+            datescraped = item['datescraped']
         )
+        myListing.save()
+        return myListing
 
 class JsonWriterPipeline:
     global firstline
