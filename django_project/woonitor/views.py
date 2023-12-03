@@ -17,12 +17,20 @@ def item(request, stad, id):
     except:
         raise Http404("House does not exist")
 
-    date = item.datescraped.strftime('%m/%d/%Y - %H:%M:%S')
+    scrapedate = item.datescraped.strftime('%m/%d/%Y - %H:%M:%S')
+    aangebodensinds = item.aangebodensinds.strftime('%m/%d/%Y')
+    verkoopdatum = item.verkoopdatum.strftime('%m/%d/%Y')
+    
     vraagprijs = f"€ {item.vraagprijs:,}".replace(',','.')
+   
+    
 
     context = {"item": item, 
-               "date": date, 
-               "vraagprijs": vraagprijs}
+               "date": scrapedate, 
+               "aangebodensinds" : aangebodensinds,
+               "verkoopdatum" : verkoopdatum,
+               "vraagprijs": vraagprijs,
+                }
     
     return render(request, "woonitor/item.html", context)
 
@@ -33,10 +41,25 @@ def stad(request, stad):
 
     avg_prijs = f'€ {avg_prijs:,.2f}'
     avg_oppervlak = f"{int(avg_oppervlak)} m²"
-
     context = {"listings": listings,
                "stad": stad,
                "gemiddeldePrijs" : avg_prijs,
                "gemiddeldeOppervlak" : avg_oppervlak}
     
     return render(request, "woonitor/stad.html", context)
+
+#TODO implementeer buurten (eerst: buurt in scraper)
+# def buurt(request, stad, buurt):
+#     listings = Listing.objects.filter(stad=stad)
+#     avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
+#     avg_oppervlak = listings.aggregate(Avg('oppervlakte'))['oppervlakte__avg']
+
+#     avg_prijs = f'€ {avg_prijs:,.2f}'
+#     avg_oppervlak = f"{int(avg_oppervlak)} m²"
+
+#     context = {"listings": listings,
+#                "stad": stad,
+#                "gemiddeldePrijs" : avg_prijs,
+#                "gemiddeldeOppervlak" : avg_oppervlak}
+    
+#     return render(request, "woonitor/stad.html", context)
