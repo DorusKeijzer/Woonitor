@@ -23,13 +23,13 @@ class spider(scrapy.Spider):
             next_page = self.nextpage(response.url)
             yield scrapy.Request(url=next_page, callback=self.parse)
 
-    def nextpage(self, url):
+    def nextpage(self, url) -> str:
         """When given a link that ends in 'search_results=[integer]', 
         this function returns that link, ending in 'search_results=[integer + 1]
         
         e.g. : .../search_results=2 -> .../search_results=3'"""
         page = re.match(r"(.*search_result=)(\d+)",url)
-        return = page.group(1) + str(int(page.group(2))+1)
+        return page.group(1) + str(int(page.group(2))+1)
 
 
     def parsehuis(self, response):
