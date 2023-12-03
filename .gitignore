@@ -1,1 +1,2 @@
 /data/*
+/django_project/db.sqlite3
