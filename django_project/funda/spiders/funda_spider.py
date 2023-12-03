@@ -20,13 +20,17 @@ class spider(scrapy.Spider):
             for huizenlink in huizenlinks:
                 yield scrapy.Request(url=huizenlink, callback=self.parsehuis)
 
-            # volgende pagina is de huidige pagina + 1
-            page = re.match(r"(.*search_result=)(\d+)",
-                                response.url)
-            next_page = page.group(1) + str(int(page.group(2))+1)
-            # bezoek en parseer de volgende pagina
-            if int(page.group(2))+1 <  3:
-                yield scrapy.Request(url=next_page, callback=self.parse)
+            next_page = self.nextpage(response.url)
+            yield scrapy.Request(url=next_page, callback=self.parse)
+
+    def nextpage(self, url):
+        """When given a link that ends in 'search_results=[integer]', 
+        this function returns that link, ending in 'search_results=[integer + 1]
+        
+        e.g. : .../search_results=2 -> .../search_results=3'"""
+        page = re.match(r"(.*search_result=)(\d+)",url)
+        return = page.group(1) + str(int(page.group(2))+1)
+
 
     def parsehuis(self, response):
         # de elementen die adres, postcode en prijs geven staan niet tussen de kenmerkenlijst
