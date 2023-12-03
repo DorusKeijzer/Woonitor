@@ -32,7 +32,7 @@ py manage.py runserver
     * filteren per maand
     * filteren per buurt
     * prijsontwikkelingen over tijd
-* Schedling
+* Scheduling
 * Implementeer uuid
 * Voorkom dat de scraper reeds bezochte links nog eens scrapet
 * gebruiksvriendelijk maken 
