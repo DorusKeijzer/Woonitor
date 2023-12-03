@@ -46,9 +46,10 @@ class webPipeLine:
             postcode = item['postcode'],
             stad= item['stad'].strip(),
             buurt = "???",
-            oppervlakte = self.controlInt(item, 'Oppervlakte'),
             vraagprijs = self.controlInt(item, 'Vraagprijs'),
-            datescraped = item['datescraped']
+            datescraped = item['datescraped'],
+            aangebodensinds = item['Aangeboden sinds'],
+            verkoopdatum = item['Verkoopdatum'],
         )
         myListing.save()
         return myListing

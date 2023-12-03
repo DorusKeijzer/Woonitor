@@ -22,8 +22,6 @@ def item(request, stad, id):
     verkoopdatum = item.verkoopdatum.strftime('%m/%d/%Y')
     
     vraagprijs = f"€ {item.vraagprijs:,}".replace(',','.')
-   
-    
 
     context = {"item": item, 
                "date": scrapedate, 
@@ -37,10 +35,9 @@ def item(request, stad, id):
 def stad(request, stad):
     listings = Listing.objects.filter(stad=stad)
     avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    avg_oppervlak = listings.aggregate(Avg('oppervlakte'))['oppervlakte__avg']
-
     avg_prijs = f'€ {avg_prijs:,.2f}'
-    avg_oppervlak = f"{int(avg_oppervlak)} m²"
+    avg_verkoopprijs
+    
     context = {"listings": listings,
                "stad": stad,
                "gemiddeldePrijs" : avg_prijs,

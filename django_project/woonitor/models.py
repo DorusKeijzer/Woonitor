@@ -7,13 +7,17 @@ class Listing(models.Model):
     """Contains the data of a single house
     
     url: url where house can be found
-    adres: streetname and number
-    postcode: postcode i.e. 5035LN
-    stad: city
-    buurt: buurt
+    adres: string; streetname and number
+    postcode: string; postcode e.g. 5035LN
+    gemeente: string
+    stad: string
+    buurt: string
     oppervlakte: integer
     vraagprijs: integer
-    datescraped: datetime
+    energielabel: string 
+    aangebodensinds: datetime
+    verkoopdatum: date
+    datescraped: date
     """
     # funda url van de woning
     url = models.CharField(max_length=200)
@@ -30,13 +34,9 @@ class Listing(models.Model):
                 code='invalid_format'
             ),]
     )
-    gemeente = models.CharField(max_length=100)
     stad = models.CharField(max_length=100)
     buurt = models.CharField(max_length=100)
-    oppervlakte = models.IntegerField(default=0)
     vraagprijs = models.IntegerField(default=0)
-    bouwjaar = models.IntegerField(default=0)
-    energielabel = models.CharField(max_length=6)
     aangebodensinds = models.DateTimeField("Offered since")
     verkoopdatum = models.DateTimeField("Sold on")
     datescraped = models.DateTimeField("Date scraped")
