@@ -27,6 +27,7 @@ py manage.py runserver
 
 
 ## To do:
+* maak hem iets mooier
 * Implementeer datavisualisatie met charts.js
     * filteren per maand
     * filteren per buurt
