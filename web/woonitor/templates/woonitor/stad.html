@@ -1,0 +1,36 @@
+{% load static %}
+
+<!DOCTYPE html>
+<header>
+    <title>{{stad}} - Woonitor</title>
+    <link rel="stylesheet", type = "text/css", href="{% static 'woonitor/styles.css' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
+</header>
+<body>
+    <h1>{{stad}}</h1>
+    <table>
+        <tr>
+            <td>Gemiddelde vraagprijs</td>
+            <td>{{gemiddeldePrijs}}</td>
+        </tr>
+        <tr>
+            <td>Gemiddelde oppervlakte:</td>
+            <td>{{gemiddeldeOppervlak}}</td>
+        </tr>
+    </table>
+
+    <!--Creates a table containing listings -->
+    <h2>Huizen in tilburg:</h2>
+    {% if listings %}
+        <ul>
+        {% for listing in listings %}
+            <li><a href="/woonitor/{{listing.stad}}/{{ listing.id }}">{{ listing.adres }}</a></li>
+        {% endfor %}
+        </ul>   
+    {% else %}
+        <p>Geen huizen gevonden.</p>
+    {% endif %}
+
+    <a href = ./index>Totaaloverzicht</a><br>
+
+</body>

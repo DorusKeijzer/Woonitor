@@ -1,0 +1,34 @@
+/* static/styles.css */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    margin-left: 40px;
+    font-size:20px;
+    color: #333;
+}
+
+h1 {
+    font-size: 45px;
+    margin-bottom: 0px;
+}
+
+table
+{
+    background-color: rgba(148, 148, 148, 0.308);
+    margin-bottom: 20px;
+    border-color: #333;
+    border-style: 2px;
+}
+table tr
+{
+    padding-right: 3px;
+}
+table tr:nth-child(odd) {
+    background-color: #9f9f9f;
+  }
+
+.data {
+    display: flex;
+  }
+
+/* Add more styles as needed */

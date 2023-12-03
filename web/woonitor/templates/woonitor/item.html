@@ -1,0 +1,39 @@
+{% load static %}
+
+<!DOCTYPE html>
+<header>
+    <title>{{item.adres}} - {{item.postcode}} {{item.stad}}</title>
+    <link rel="stylesheet", type = "text/css", href="{% static 'woonitor/styles.css' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
+</header>
+
+<body>
+<H1>{{ item.adres }}</H1>
+    <div class="data">
+        <table>
+            <tr>
+                <td>Postcode</td>
+                <td>{{item.postcode}}</td>
+            </tr>
+            <tr>
+                <td>Stad</td>
+                <td>{{item.stad}}</td>
+            </tr>
+            <tr>
+                <td>Vraagprijs</td>
+                <td>{{vraagprijs}}</td>
+            </tr>            
+            <tr>
+                <td>Oppervlakte</td>
+                <td>{{item.oppervlakte}} m²</td>
+            </tr> 
+            <tr>
+                <td>Opgehaald op</td>
+                <td>{{date}}</td>
+            </tr>
+        </table>
+    </div>
+    <a href = {{item.url}}> Bekijk op Funda</a><br><br>
+    <a href = ../index>Totaaloverzicht</a><br>
+    <a href = ../{{item.stad}}>Meer huizen in {{item.stad}}</a>
+</body>
