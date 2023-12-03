@@ -6,7 +6,7 @@ Met wonitor kun je de Nederlandse huizenmarkt in de gaten houden. Woonitor besta
 Installeer anaconda, clone deze repository. Maak een conda-environment doormiddel van het volgende commando:
 
 ```
-conda create --name your_new_environment_name --file requirements.txt
+conda create --name woonitor --file requirements.txt
 ```
 
 ### Scraper
@@ -24,12 +24,7 @@ De web app wordt ook gestard vanuit ``root\django_project``. Het volgende comman
 cd .\django_project
 py manage.py runserver
 ```
-De command line geeft aan waar de web-app gehost wordt (standaard: http://127.0.0.1:8000/woonitor/)
 
-De web-app heeft de volgende pagina's:
-* /woonitor/index : bevat alle huizen op de database
-* /woonitor/[stad] : bevat alle huizen in de gekozen stad en een analyse
-* /woonitor/[stad]/[id] : geeft de informatie van één huis 
 
 ## To do:
 * Implementeer datavisualisatie met charts.js
