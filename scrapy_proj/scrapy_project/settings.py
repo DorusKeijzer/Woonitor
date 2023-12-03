@@ -65,7 +65,8 @@ DOWNLOAD_DELAY = 3
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-    "funda.pipelines.JsonWriterPipeline": 300,
+    "funda.pipelines.webPipeLine": 300,
+   # "funda.pipelines.JsonWriterPipeline": 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

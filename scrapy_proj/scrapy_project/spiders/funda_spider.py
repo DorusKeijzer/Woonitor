@@ -1,12 +1,12 @@
 import scrapy
 import re
+from datetime import datetime
 
 class spider(scrapy.Spider):
     name = "het_fundamannetje"
     start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&search_result=1"]
  
     def parse(self, response):
-
         if "Geen resultaten" in response.text:
             # klaar met zoeken.
             pass 
@@ -32,8 +32,11 @@ class spider(scrapy.Spider):
     def parsehuis(self, response):
         # de elementen die adres, postcode en prijs geven staan niet tussen de kenmerkenlijst
         adres = response.css("span.object-header__title::text").get()
+        postcodeEnStad = response.css("span.object-header__subtitle::text")
         postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w")[0]
+        postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w (\w+)")[0]
         kenmerken = { 
+                "datescraped": datetime.now(),
                 "url" : response.url,
                 "Adres": adres,
                 "Postcode" : postcode,

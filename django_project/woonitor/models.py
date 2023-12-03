@@ -4,7 +4,17 @@ from django.core.validators import RegexValidator
 
 
 class Listing(models.Model):
-    """Contains the data of a single house"""
+    """Contains the data of a single house
+    
+    url: url where house can be found
+    adres: streetname and number
+    postcode: postcode i.e. 5035LN
+    stad: city
+    buurt: buurt
+    oppervlakte: integer
+    vraagprijs: integer
+    datescraped: datetime
+    """
     url = models.CharField(max_length=200)
     adres = models.CharField(max_length=200)
     postcode = models.CharField(

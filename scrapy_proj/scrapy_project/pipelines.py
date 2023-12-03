@@ -9,10 +9,29 @@ from itemadapter import ItemAdapter
 import json
 from datetime import datetime
 import re
+import os
+import sys
+# Add the path to the directory containing your Django project
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+import django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web.web.settings")
+django.setup()
+
+from web.woonitor.models import Listing
 
 class FundaPipeline:
     def process_item(self, item, spider):
         return item
+    
+class webPipeLine:
+    def process_item(self, item, spider):
+        myListing = Listing(
+            url = item['url'], 
+            adres = item['adres'],
+            postcode = item['postcode'],
+            stad= item['stad']
+        )
 
 class JsonWriterPipeline:
     global firstline
