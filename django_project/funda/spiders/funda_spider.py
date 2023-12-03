@@ -52,6 +52,7 @@ class spider(scrapy.Spider):
             if links in ["Verkoopdatum", "Aangeboden sinds"]:
                 kenmerken[links.strip()] = parseDate(rechts.strip())
 
+        kenmerken['Verkooptijd'] = (kenmerken['Verkoopdatum'] - kenmerken['Aangeboden sinds']).days
         # Extracting data from Kenmerken section
         laatste_vraagprijs = response.css('.object-kenmerken-list dt:contains("Laatste vraagprijs") + dd span::text').get()
         kenmerken['Vraagprijs'] = laatste_vraagprijs

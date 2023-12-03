@@ -39,6 +39,7 @@ class Listing(models.Model):
     vraagprijs = models.IntegerField(default=0)
     aangebodensinds = models.DateTimeField("Offered since")
     verkoopdatum = models.DateTimeField("Sold on")
+    verkooptijd = models.IntegerField(default=0)
     datescraped = models.DateTimeField("Date scraped")
 
     def __str__(self):
