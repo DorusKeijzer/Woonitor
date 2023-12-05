@@ -10,7 +10,7 @@ from .models import Listing
 def index(request):
     listings = Listing.objects.all()
     context = {"listings": listings}
-    return render(request, "woonitor/index.html", context)
+    return render(request, "woonitor/modern.html", context)
 
 def item(request, stad, id):
     try: 
@@ -67,6 +67,41 @@ def stad(request, stad):
                "maandTijd": avg_verkooptijd_lastmonth}
     
     return render(request, "woonitor/stad.html", context)
+
+def analyse(request, stad):
+    listings = Listing.objects.filter(stad=stad)
+    avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
+    avg_prijs = f'€ {avg_prijs:,.2f}'
+    avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
+    avg_verkooptijd = f'{avg_verkooptijd:.1f} dagen'
+    
+    end_date = timezone.now()
+    start_date = end_date - timezone.timedelta(days=30)  # Assuming a month is approximately 30 days
+
+    # finds the number corresponding to last month's date
+    lastmonthnumber = ((end_date.month-2) % 12)+1
+    lastmonthname = maand(lastmonthnumber)
+
+    now = timezone.now()
+    start_date = timezone.datetime(now.year, now.month - 1, 1)
+    end_date = timezone.datetime(now.year, now.month, 1) - timezone.timedelta(days=1)
+    lastmonth = listings.filter(verkoopdatum__range=[start_date, end_date])
+
+    avg_prijs_lastmonth = lastmonth.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
+    avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
+    avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
+    avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
+
+
+    context = {"listings": listings,
+            "stad": stad,
+            "gemiddeldePrijs" : avg_prijs,
+            "gemiddeldeVerkooptijd" : avg_verkooptijd,
+            "vorigemaand": lastmonthname,
+            "maandPrijs" : avg_prijs_lastmonth,
+            "maandTijd": avg_verkooptijd_lastmonth}
+    
+    return render(request, "woonitor/analyse.html", context)
 
 def maand(integer)->str:
     """Returns the month in Dutch that corresponds to the integer

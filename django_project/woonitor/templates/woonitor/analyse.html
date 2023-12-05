@@ -5,6 +5,9 @@
     <title>{{stad}} - Woonitor</title>
     <link rel="stylesheet" , type="text/css" , href="{% static 'woonitor/styles.css' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
+    <!-- Using CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 </header>
 
 <body>
@@ -14,8 +17,8 @@
     <div class="flex-container">
         <div class="sidebar">
             <ul>
-                <li><a href=/woonitor/index>Totaaloverzicht</a></li>
-                <li><a href=/woonitor/{{stad}}/analyse>analyse</a></li>
+                <li><a href=../index>Totaaloverzicht</a></li>
+                <li><a href=.>Overzicht {{stad}}</a></li>
             </ul>
         </div>
         <div class="content">
@@ -38,18 +41,6 @@
                     <td>{{maandTijd}}</td>
                 </tr>
             </table>
-
-            <!--Creates a table containing listings -->
-            <h2>Huizen in {{stad}}:</h2>
-            {% if listings %}
-            <ul>
-                {% for listing in listings %}
-                <li><a href="/woonitor/{{listing.stad}}/{{ listing.id }}">{{ listing.adres }}</a></li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p>Geen huizen gevonden.</p>
-            {% endif %}
         </div>
     </div>
 </body>

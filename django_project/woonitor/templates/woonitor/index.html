@@ -3,30 +3,30 @@
 <!DOCTYPE html>
 <header>
     <title>Woonitor - index</title>
-    <link rel="stylesheet", type = "text/css", href="{% static 'woonitor/styles.css' %}">
+    <link rel="stylesheet" , type="text/css" , href="{% static 'woonitor/styles.css' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
 </header>
+
 <body>
     <h1>Woonitor</h1>
-
     <!--Creates a table containing listings -->
     <h2>Huizen:</h2>
     {% if listings %}
-        <table>
-            <tr>
-                <th>Huis</th>
-                <th>stad</th>
-            </tr>
-            {% for listing in listings %}
+    <table>
+        <tr>
+            <th>Huis</th>
+            <th>stad</th>
+        </tr>
+        {% for listing in listings %}
 
-            <tr>
-                <td><a href="/woonitor/{{listing.stad}}/{{ listing.id }}">{{ listing.adres }}</a></td>
-                <td><a href="/woonitor/{{listing.stad}}"> {{listing.stad}} </a></td>
-            </tr>
+        <tr>
+            <td><a href="/woonitor/{{listing.stad}}/{{ listing.id }}">{{ listing.adres }}</a></td>
+            <td><a href="/woonitor/{{listing.stad}}"> {{listing.stad}} </a></td>
+        </tr>
         {% endfor %}
-        </table>   
+    </table>
     {% else %}
-        <p>Geen huizen gevonden.</p>
+    <p>Geen huizen gevonden.</p>
     {% endif %}
 
 

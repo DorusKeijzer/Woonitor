@@ -3,49 +3,62 @@
 <!DOCTYPE html>
 <header>
     <title>{{item.adres}} - {{item.postcode}} {{item.stad}}</title>
-    <link rel="stylesheet", type = "text/css", href="{% static 'woonitor/styles.css' %}">
+    <link rel="stylesheet" , type="text/css" , href="{% static 'woonitor/styles.css' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
 </header>
 
 <body>
-<H1>{{ item.adres }}</H1>
-    <div class="data">
-        <table>
-            <tr>
-                <td><b>Postcode</b></td>
-                <td>{{item.postcode}}</td>
-            </tr>
-            <tr>
-                <td><b>Stad</b></td>
-                <td>{{item.stad}}</td>
-            </tr>
-            <tr>
-                <td><b>Buurt</b></td>
-                <td>{{item.buurt}}</td>
-            </tr>
-            <tr>
-                <td><b>Laatste vraagprijs</b></td>
-                <td>{{vraagprijs}}</td>
-            </tr>
-            <tr>
-                <td><b>Verkoopdatum</b></td>
-                <td>{{item.verkoopdatum}}</td>
-            </tr>
-            <tr>
-                <td><b>Aangeboden sinds</b></td>
-                <td>{{item.aangebodensinds}}</td>
-            </tr>
-            <tr>
-                <td><b>Verkooptijd</b></td>
-                <td>{{item.verkooptijd}} dagen</td>
-            </tr>
-            <tr>
-                <td><b>Opgehaald op</b></td>
-                <td>{{date}}</td>
-            </tr>
-        </table>
+    <div class="header">
+        <h1><a href=../index>Woonitor</a><h1>
     </div>
-    <a href = {{item.url}}> Bekijk op Funda</a><br><br>
-    <a href = ../index>Totaaloverzicht</a><br>
-    <a href = ../{{item.stad}}>Meer huizen in {{item.stad}}</a>
+    <div class="flex-container">
+        <div class="sidebar">
+            <ul>
+                <li><a href=../index>Totaaloverzicht</a></li>
+                <li><a href=../{{item.stad}}>Overzicht {{item.stad}}</a> </li>
+            </ul>
+        </div>
+        <div class="content">
+            <h2>{{ item.adres }}</h2>
+
+            <table>
+                <tr>
+                    <td><b>Postcode</b></td>
+                    <td>{{item.postcode}}</td>
+                </tr>
+                <tr>
+                    <td><b>Stad</b></td>
+                    <td>{{item.stad}}</td>
+                </tr>
+                <tr>
+                    <td><b>Buurt</b></td>
+                    <td>{{item.buurt}}</td>
+                </tr>
+                <tr>
+                    <td><b>Laatste vraagprijs</b></td>
+                    <td>{{vraagprijs}}</td>
+                </tr>
+                <tr>
+                    <td><b>Verkoopdatum</b></td>
+                    <td>{{item.verkoopdatum}}</td>
+                </tr>
+                <tr>
+                    <td><b>Aangeboden sinds</b></td>
+                    <td>{{item.aangebodensinds}}</td>
+                </tr>
+                <tr>
+                    <td><b>Verkooptijd</b></td>
+                    <td>{{item.verkooptijd}} dagen</td>
+                </tr>
+                <tr>
+                    <td><b>Opgehaald op</b></td>
+                    <td>{{date}}</td>
+                </tr>
+            </table>
+            <a href={{item.url}}> Bekijk op Funda</a><br><br>
+            <a href=../index>Totaaloverzicht</a><br>
+            <a href=../{{item.stad}}>Meer huizen in {{item.stad}}</a>
+
+        </div>
+    </div>
 </body>

@@ -1,34 +1,89 @@
 /* static/styles.css */
 body {
-    font-family: Arial, sans-serif;
+    font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
     background-color: #f0f0f0;
-    margin-left: 40px;
-    font-size:20px;
+    font-size: 20px;
     color: #333;
+    padding: 0px;
+    margin: 0px;
 }
-
-h1 {
-    font-size: 45px;
-    margin-bottom: 0px;
-}
-
-table
+h1,h2
 {
-    background-color: rgba(148, 148, 148, 0.308);
+    font-variant: small-caps;
+
+}
+
+h1{
+    font-size: 45px;
+}
+
+ul {
+    list-style-type: none;
+    /* Remove bullets */
+    padding-left: 0;
+}
+
+a,
+a:visited {
+    color: rgb(27, 25, 21);
+    text-decoration: none;
+    /* Remove the underline if you wish */
+}
+
+a:hover {
+    color: rgb(255, 166, 0);
+}
+
+table {
+    width: 50%;
     margin-bottom: 20px;
     border-color: #333;
     border-style: 2px;
+    justify-content: center;
+    align-items: center;
 }
-table tr
-{
-    padding-right: 3px;
-}
-table tr:nth-child(odd) {
-    background-color: #9f9f9f;
-  }
 
-.data {
+.flex-container {
     display: flex;
-  }
+}
+
+.flex-container div {
+    height: 60%;
+    flex: 1 1 0%;
+    padding-left: 1em;
+    padding-top: 1em;
+
+}
+
+.flex-container .content {
+    flex: 7 1 0%;
+    height: 100%;
+    border-left: 0.5em dashed;
+}
+
+div.header {
+    padding-left: 1em;
+    padding-bottom: 5px;
+    border-bottom: 0.5em solid;
+}
+
+
+.flex-container .sidebar {
+    height: 100%;
+}
+
+table tr {
+    padding-left: 3px;
+}
+
+td {
+    padding-left: 5px;
+
+}
+
+table tr:nth-child(odd) {
+    background-color: #cbcbcb60;
+}
+
 
 /* Add more styles as needed */
