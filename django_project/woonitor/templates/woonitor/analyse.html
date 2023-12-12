@@ -5,15 +5,20 @@
     <title>{{stad}} - Woonitor</title>
     <link rel="stylesheet" , type="text/css" , href="{% static 'woonitor/styles.css' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
+    <link rel="icon" href="{% static 'woonitor/favicon.ico' %}" type="image/x-icon">
+    <link rel="shortcut icon" href="{% static 'woonitor/favicon.ico' %}" type="image/x-icon">
+
     <!-- Using CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{% static 'woonitor/grafieken.js' %}"></script>
 
 </header>
 
 <body>
     <div class="header">
-        <h1><a href=../index>Woonitor</a><h1>
-        </div>
+        <h1><a href=../index>Woonitor</a>
+            <h1>
+    </div>
     <div class="flex-container">
         <div class="sidebar">
             <ul>
@@ -22,6 +27,7 @@
             </ul>
         </div>
         <div class="content">
+            <p>{{output}}</p>
             <h2>Overzicht {{stad}}</h2>
             <table>
                 <tr>
@@ -41,6 +47,135 @@
                     <td>{{maandTijd}}</td>
                 </tr>
             </table>
+            <canvas id="scatterChart" , width="500px" , height="500px"></canvas>
+            <canvas id="lineChart" , width="500px" , height="500px"></canvas>
+
         </div>
     </div>
 </body>
+
+<script>
+    // Dummy data
+    var data = JSON.parse('{{ data|safe }}');
+    console.log(data.verkoopdatum)
+    data.verkoopdatum = data.verkoopdatum.map(function (dateString) {
+        return new Date(dateString);
+    });
+    console.log(data.verkoopdatum)
+
+    var ctx1 = document.getElementById('lineChart').getContext('2d');
+    var lineChart = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            datasets: [{
+                label: 'Verkooptijd',
+                data: data.tijd.map((value, index) => ({ x: value, y: data.prijs[index], id: data.id[index], adres: data.adres[index] })),
+                backgroundColor: 'rgb(255, 166, 0)', // Adjust the color as needed
+                borderColor: 'rgb(255, 166, 0)',
+                pointRadius: 4,
+            }]
+        },
+        options: {
+            responsive: false, // Set to false to specify fixed width and height
+            maintainAspectRatio: false, // Set to false to allow changing the aspect ratio
+
+            scales: {
+                x: {
+                    label: 'Verkooptijd',
+                    type: 'linear',
+                    position: 'bottom',
+                    title: {
+                        display: true,
+                        text: 'Verkooptijd'
+                    }
+
+                },
+                y: {
+                    label: 'Laatste vraagprijs',
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Laatste vraagprijs'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return context.dataset.data[context.dataIndex].adres;
+                        }
+                    }
+                }
+            },
+            onClick: function (event, elements) {
+                if (elements.length > 0) {
+                    var index = elements[0].index;
+                    var id = data.id[index];
+                    // Navigate to the URL based on the ID (replace 'your_base_url' with your actual base URL)
+                    window.location.href = id;
+                }
+            }
+        },
+
+    })
+
+    var ctx2 = document.getElementById('scatterChart').getContext('2d');
+    var scatterChart = new Chart(ctx2, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Verkooptijd',
+                data: data.tijd.map((value, index) => ({ x: value, y: data.prijs[index], id: data.id[index], adres: data.adres[index] })),
+                backgroundColor: 'rgb(255, 166, 0)', // Adjust the color as needed
+                borderColor: 'rgb(255, 166, 0)',
+                pointRadius: 4,
+            }]
+        },
+        options: {
+            responsive: false, // Set to false to specify fixed width and height
+            maintainAspectRatio: false, // Set to false to allow changing the aspect ratio
+
+            scales: {
+                x: {
+                    label: 'Verkooptijd',
+                    type: 'linear',
+                    position: 'bottom',
+                    title: {
+                        display: true,
+                        text: 'Verkooptijd'
+                    }
+
+                },
+                y: {
+                    label: 'Laatste vraagprijs',
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Laatste vraagprijs'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return context.dataset.data[context.dataIndex].adres;
+                        }
+                    }
+                }
+            },
+            onClick: function (event, elements) {
+                if (elements.length > 0) {
+                    var index = elements[0].index;
+                    var id = data.id[index];
+                    // Navigate to the URL based on the ID (replace 'your_base_url' with your actual base URL)
+                    window.location.href = id;
+                }
+            }
+        },
+
+    });
+</script>

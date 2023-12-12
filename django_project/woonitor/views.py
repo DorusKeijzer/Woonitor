@@ -3,9 +3,10 @@ from django.shortcuts import render
 from django.http import Http404
 from django.db.models import Avg  
 from django.utils import timezone
-
-
+import json
 from .models import Listing
+from django.core.serializers.json import DjangoJSONEncoder
+
 
 def index(request):
     listings = Listing.objects.all()
@@ -70,6 +71,8 @@ def stad(request, stad):
 
 def analyse(request, stad):
     listings = Listing.objects.filter(stad=stad)
+    ids = [item.id for item in listings]
+
     avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
     avg_prijs = f'€ {avg_prijs:,.2f}'
     avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
@@ -92,6 +95,8 @@ def analyse(request, stad):
     avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
     avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
 
+    average_prices = listings.values('verkoopdatum').annotate(avg_verkoopprijs=Avg('verkoopprijs'))
+
 
     context = {"listings": listings,
             "stad": stad,
@@ -100,7 +105,31 @@ def analyse(request, stad):
             "vorigemaand": lastmonthname,
             "maandPrijs" : avg_prijs_lastmonth,
             "maandTijd": avg_verkooptijd_lastmonth}
-    
+
+    verkoopdatum_list = list(listings.values_list('verkoopdatum', flat=True))
+
+    # Format datetime data as strings in ISO 8601 format
+    formatted_verkoopdatum = [dt.strftime('%Y-%m-%dT%H:%M:%S') for dt in verkoopdatum_list]
+
+    # Other data
+    adres_list = list(listings.values_list('adres', flat=True))
+    prijs_list = list(listings.values_list('vraagprijs', flat=True))
+    tijd_list = list(listings.values_list('verkooptijd', flat=True))
+
+    # Construct the JSON data
+    data = json.dumps(
+        {
+            "adres": adres_list,
+            "id": ids,
+            "prijs": prijs_list,
+            "tijd": tijd_list,
+            "verkoopdatum": formatted_verkoopdatum
+        },
+        cls=DjangoJSONEncoder  # Use Django's JSON encoder to handle datetime objects
+    )
+
+    context["data"] = data
+
     return render(request, "woonitor/analyse.html", context)
 
 def maand(integer)->str:

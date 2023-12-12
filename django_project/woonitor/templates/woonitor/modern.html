@@ -3,41 +3,47 @@
 <!DOCTYPE html>
 <header>
     <title>Woonitor - index</title>
-    <link rel="stylesheet", type = "text/css", href="{% static 'woonitor/styles.css' %}">
+    <link rel="stylesheet" , type="text/css" , href="{% static 'woonitor/styles.css' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'woonitor/meekofavicon.png' %}">
+    <script src="{% static 'woonitor/grafieken.js' %}"></script>
+
 </header>
+
 <body>
-    <div class ="header">
-        <h1><a href="">Woonitor</a><h1>
-        </div>
+    <div class="header">
+        <h1>
+            <a href="">Woonitor</a>
+        </h1>
+        <button onclick="myFunction()">Click Me</button>
+    </div>
     <div class="flex-container">
-        <div class="sidebar">
+        <div class="sidebar", id="sidebar">
             <ul>
                 <li><a href="#">Link één</a></li>
                 <li><a href="#">Link twee</a></li>
                 <li><a href="#">Link drie</a></li>
                 <li><a href="#">Link vier</a></li>
-              </ul>
-            </div>
-        <div class ="content">
+            </ul>
+        </div>
+        <div class="content">
             <!--Creates a table containing listings -->
-            <h2>Huizen:</h2>
+            <h2 class="hider">Huizen:</h2>
             {% if listings %}
-                <table>
-                    <tr>
-                        <th>Huis</th>
-                        <th>stad</th>
-                    </tr>
-                    {% for listing in listings %}
+            <table class="hideabletable">
+                <tr>
+                    <th>Huis</th>
+                    <th>stad</th>
+                </tr>
+                {% for listing in listings %}
 
-                    <tr>
-                        <td><a href="/woonitor/{{listing.stad}}/{{ listing.id }}">{{ listing.adres }}</a></td>
-                        <td><a href="/woonitor/{{listing.stad}}"> {{listing.stad}} </a></td>
-                    </tr>
+                <tr>
+                    <td><a href="/woonitor/{{listing.stad}}/{{ listing.id }}">{{ listing.adres }}</a></td>
+                    <td><a href="/woonitor/{{listing.stad}}"> {{listing.stad}} </a></td>
+                </tr>
                 {% endfor %}
-                </table>   
+            </table>
             {% else %}
-                <p>Geen huizen gevonden.</p>
+            <p>Geen huizen gevonden.</p>
             {% endif %}
         </div>
     </div>

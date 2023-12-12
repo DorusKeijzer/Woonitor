@@ -13,6 +13,7 @@ h1,h2
 
 }
 
+
 h1{
     font-size: 45px;
 }
@@ -29,6 +30,16 @@ a:visited {
     text-decoration: none;
     /* Remove the underline if you wish */
 }
+
+.hider:hover{
+    color:yellow;
+}
+.hider:active{
+    transform: scale(1, 0.9);
+    color:#2d3436;
+    transition: transform 0.2s color 0.2s;
+    }
+    
 
 a:hover {
     color: rgb(255, 166, 0);
