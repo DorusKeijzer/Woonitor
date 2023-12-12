@@ -18,13 +18,16 @@ from funda.items import FundaItem
 class spider(scrapy.Spider):
     name = "het_tweede_fundamannetje"
     # start_urls should end in "search_result=1"
-    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22nl%22%5D&availability=%5B%22unavailable%22%5D&sort=%22date_up%22&search_result=1"]
+    # start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22nl%22%5D&availability=%5B%22unavailable%22%5D&sort=%22date_up%22&search_result=1"]
+    start_urls = [r'https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&availability=%5B%22unavailable%22%5D&search_result=1',
+                  r'https://www.funda.nl/zoeken/koop?selected_area=%5B%22utrecht%22%5D&availability=%5B%22unavailable%22%5D&search_result=1',
+                  r'https://www.funda.nl/zoeken/koop?selected_area=%5B%22amsterdam%22%5D&availability=%5B%22unavailable%22%5D&search_result=1']
     # start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tiel%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
     # start_urls = [r'https://www.funda.nl/koop/verkocht/tiel/huis-42352883-dr-schaepmanstraat-47/']
     
     # keeps track of the duplicate status of the last n runs
     # if n duplicates are found in order, terminates scraping
-    n = 20
+    n = 40
     parsewindow = [False for n in range(n)]
     def parse(self, response):
 

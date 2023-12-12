@@ -51,6 +51,7 @@
                     <td>{{maandTijd}}</td>
                 </tr>
             </table>
+            <canvas id="monthsChart" , width="1000px" , height="500px"></canvas>
             <canvas id="scatterChart" , width="500px" , height="500px"></canvas>
             <canvas id="lineChart" , width="500px" , height="500px"></canvas>
 
@@ -59,13 +60,80 @@
 </body>
 
 <script>
-    // Dummy data
-    var data = JSON.parse('{{ data|safe }}');
+    var data = JSON.parse('{{ data|escapejs }}');
     console.log(data.verkoopdatum)
     data.verkoopdatum = data.verkoopdatum.map(function (dateString) {
         return new Date(dateString);
     });
     console.log(data.verkoopdatum)
+    console.log(data)
+
+    console.log(data.months)
+    var ctx0 = document.getElementById('monthsChart').getContext('2d');
+    var lineChart = new Chart(ctx0, {
+        type: 'bar',
+        data: {
+            labels: data.months,
+            datasets: [{
+                label: 'Gemiddelde laatste vraagprijs',
+                data: data.months.map((value, index) => ({ x: index, y: data.avgpermonth[index], months: data.months[index], numberssold: data.numberssold[index] })),
+                backgroundColor: 'rgb(255, 166, 0)', // Adjust the color as needed
+                borderColor: 'rgb(255, 166, 0)',
+                pointRadius: 4,
+            }]
+        },
+        options: {
+            responsive: false, // Set to false to specify fixed width and height
+            maintainAspectRatio: false, // Set to false to allow changing the aspect ratio
+            animation: false, // Disable animations
+
+            scales: {
+                x: {
+                    label: 'Maand',
+                    type: 'category',
+                    position: 'bottom',
+                    title: {
+                        display: true,
+                        text: 'Maand'
+                        
+                    },
+                    indexAxis: 'x', // This is the key line for specifying x-axis labels
+
+
+
+                },
+                y: {
+                    beginAtZero:true,
+                    label: 'Laatste vraagprijs',
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Laatste vraagprijs'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            var aantal = context.dataset.data[context.dataIndex].numberssold
+                            var prijs = context.dataset.data[context.dataIndex].y
+                            if (aantal == 1)
+                            {
+                                var out = "1 woning verkocht\nGemiddele laatse vraagprijs "; 
+                                return out + prijs;
+                            }
+                            else
+                            {
+                                return aantal + " woningen verkocht\nGemiddelde laatste vraagprijs: " + prijs; 
+                            }
+                        }
+                    }
+                }
+            },
+        },
+    })
 
     var ctx1 = document.getElementById('lineChart').getContext('2d');
     var lineChart = new Chart(ctx1, {
@@ -82,6 +150,7 @@
         options: {
             responsive: false, // Set to false to specify fixed width and height
             maintainAspectRatio: false, // Set to false to allow changing the aspect ratio
+            animation: false, // Disable animations
 
             scales: {
                 x: {
@@ -140,6 +209,7 @@
         options: {
             responsive: false, // Set to false to specify fixed width and height
             maintainAspectRatio: false, // Set to false to allow changing the aspect ratio
+            animation: false, // Disable animations
 
             scales: {
                 x: {

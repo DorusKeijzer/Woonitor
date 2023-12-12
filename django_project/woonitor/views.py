@@ -44,28 +44,7 @@ def stad(request, stad):
     avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
     avg_verkooptijd = f'{avg_verkooptijd:.1f} dagen'
     
-    end_date = timezone.now()
-    start_date = end_date - timezone.timedelta(days=30)  # Assuming a month is approximately 30 days
-
-    # finds the number corresponding to last month's date
-    lastmonthnumber = ((end_date.month-2) % 12)+1
-    lastmonthname = maand(lastmonthnumber)
-
-    now = timezone.now()
-    start_date = timezone.datetime(now.year, now.month - 1, 1)
-    end_date = timezone.datetime(now.year, now.month, 1) - timezone.timedelta(days=1)
-    lastmonth = listings.filter(verkoopdatum__range=[start_date, end_date])
-
-    avg_prijs_lastmonth = lastmonth.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    if not avg_prijs_lastmonth:
-        avg_prijs_lastmonth = "N/A"
-    else:
-        avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
-    avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
-    if not avg_verkooptijd_lastmonth:
-        avg_verkooptijd_lastmonth = "N/A"
-    else:
-        avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
+    lastmonthname, avg_verkooptijd_lastmonth, avg_prijs_lastmonth, numberssold = monthdata(listings, timezone.now().month, timezone.now.year)
 
 
     context = {"listings": listings,
@@ -83,40 +62,16 @@ def analyse(request, stad):
     listings = Listing.objects.filter(stad=stad)
     aantal  = listings.count
     ids = [item.id for item in listings]
-
-    avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    if not avg_prijs:
-        avg_prijs = "N/A"
-    else:
-        avg_prijs = f'€ {avg_prijs:,.2f}'
-    avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
-    if not avg_verkooptijd:
-        avg_verkooptijd = "N/A"
-    else:
-        avg_verkooptijd = f'€ {avg_verkooptijd:,.2f}'
     
-    end_date = timezone.now()
-    start_date = end_date - timezone.timedelta(days=30)  # Assuming a month is approximately 30 days
+    now = timezone.now()    
+    lastmonthnumber = ((now.month-2) % 12)+1
+    year = now.year -1 if lastmonthnumber == 12 else now.year
 
-    # finds the number corresponding to last month's date
-    lastmonthnumber = ((end_date.month-2) % 12)+1
-    lastmonthname = maand(lastmonthnumber)
+    lastmonthname, avg_verkooptijd_lastmonth, avg_prijs_lastmonth, _ = monthdata(listings, lastmonthnumber, year)
+    avg_prijs_lastmonth, avg_verkooptijd_lastmonth = formataverage(avg_prijs_lastmonth, avg_verkooptijd_lastmonth)
 
-    now = timezone.now()
-    start_date = timezone.datetime(now.year, now.month - 1, 1)
-    end_date = timezone.datetime(now.year, now.month, 1) - timezone.timedelta(days=1)
-    lastmonth = listings.filter(verkoopdatum__range=[start_date, end_date])
-
-    avg_prijs_lastmonth = lastmonth.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    if not avg_prijs_lastmonth:
-        avg_prijs_lastmonth = "N/A"
-    else:
-        avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
-    avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
-    if not avg_verkooptijd_lastmonth:
-        avg_verkooptijd_lastmonth = "N/A"
-    else:
-        avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
+    avg_prijs, avg_verkooptijd = averages(listings)
+    avg_prijs, avg_verkooptijd = formataverage(avg_prijs,avg_verkooptijd)
 
     context = {"listings": listings,
             "stad": stad,
@@ -137,6 +92,7 @@ def analyse(request, stad):
     prijs_list = list(listings.values_list('vraagprijs', flat=True))
     tijd_list = list(listings.values_list('verkooptijd', flat=True))
 
+    monthlyaverage, months, numberssold = avgpermonth(now, listings,24)
     # Construct the JSON data
     data = json.dumps(
         {
@@ -144,7 +100,10 @@ def analyse(request, stad):
             "id": ids,
             "prijs": prijs_list,
             "tijd": tijd_list,
-            "verkoopdatum": formatted_verkoopdatum
+            "verkoopdatum": formatted_verkoopdatum,
+            "avgpermonth" : monthlyaverage,
+            "months" : months,
+            "numberssold" : numberssold,
         },
         cls=DjangoJSONEncoder  # Use Django's JSON encoder to handle datetime objects
     )
@@ -153,7 +112,59 @@ def analyse(request, stad):
 
     return render(request, "woonitor/analyse.html", context)
 
-def maand(integer)->str:
+def averages(listings):
+    avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
+    avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
+
+    return avg_prijs, avg_verkooptijd
+
+def formataverage(avg_prijs, avg_verkooptijd):
+    if avg_prijs:
+        prijs ="$ {:,.2f}".format(avg_prijs)
+    else:
+        prijs = "N/A"
+    if avg_verkooptijd:
+        tijd = f"{avg_verkooptijd:.0f} dagen"
+    else:
+        tijd = "N/A"
+    
+    return prijs, tijd
+
+def monthdata(listings, monthnumber, yearnumber):
+    """returns the name of last month, the average sell time, the average price and the number of units sold"""
+    lastmonthname = month(monthnumber)
+
+    start_date = timezone.datetime(yearnumber, monthnumber, 1)
+    if monthnumber == 12:
+        end_date = timezone.datetime(yearnumber+1, 1, 1) - timezone.timedelta(days=1)
+    else:
+        end_date = timezone.datetime(yearnumber, monthnumber+1, 1) - timezone.timedelta(days=1)
+    lastmonth = listings.filter(verkoopdatum__range=[start_date, end_date])
+    
+    avg_prijs_lastmonth, avg_verkooptijd_lastmonth = averages(lastmonth)
+    housesSold = lastmonth.count()
+    return lastmonthname, avg_verkooptijd_lastmonth, avg_prijs_lastmonth, housesSold
+
+def avgpermonth(enddate, listings, no_of_months):
+    prices = []
+    months = []
+    housesSold = []
+    j = 0
+    for n in range(1,no_of_months):
+        monthnumber = ((enddate.month-1-n) % 12)+1
+        if monthnumber == 12:
+            j+=1
+        if (avgs := monthdata(listings, monthnumber, enddate.year-j)):
+            _, _, avgprice, numberSold = avgs
+            prices.insert(0,avgprice)
+        else:
+            prices.insert(0,0)
+        housesSold.insert(0,numberSold)
+        months.insert(0,month(monthnumber))
+    return prices, months, housesSold
+
+
+def month(integer)->str:
     """Returns the month in Dutch that corresponds to the integer
     e.g.: maand(3) -> 'maart'"""
     monthdict = {
