@@ -27,9 +27,11 @@ py manage.py runserver
 
 
 ## To do:
+* woningtype
 * maak hem iets mooier
 * Implementeer datavisualisatie met charts.js
     * ~~filteren per maand~~
+    * filter per woningtype
     * filteren per buurt
     * prijsontwikkelingen over tijd
 * Scheduling
