@@ -41,6 +41,7 @@ class Listing(models.Model):
     verkoopdatum = models.DateTimeField("Sold on")
     verkooptijd = models.IntegerField(default=0)
     datescraped = models.DateTimeField("Date scraped")
+    fundaID = models.IntegerField()
 
     def __str__(self):
         return f"{self.adres}, {self.postcode}, {self.stad}, id: {self.id}"

@@ -3,15 +3,28 @@ import re
 from datetime import datetime
 from datetime import date
 from django.utils import timezone
-from asgiref.sync import sync_to_async
+import os
+import sys
+# Add the path to the directory containing your Django project
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+os.environ['DJANGO_SETTINGS_MODULE'] = 'project.settings'  # Replace with your actual project's settings module
+
+import django
+django.setup()
+    
+from woonitor.models import Listing
+from funda.items import FundaItem
 
 class spider(scrapy.Spider):
-    name = "het_fundamannetje"
+    name = "het_tweede_fundamannetje"
     # start_urls should end in "search_result=1"
-    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
+    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22utrecht%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
     # start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tiel%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
     # start_urls = [r'https://www.funda.nl/koop/verkocht/tiel/huis-42352883-dr-schaepmanstraat-47/']
-    @sync_to_async  
+    
+    # keeps track of the duplicate status of the last 15 runs
+    parsewindow = [False,False,False,False,False,False,False,False,False,False,False,False,False,False,False]
     def parse(self, response):
 
         if "Geen resultaten" in response.text:
@@ -21,16 +34,19 @@ class spider(scrapy.Spider):
         else:
             # geeft alle huizenlinks op een "zoeken" page 
             # TODO fix deeplink
-            huizenlinks = response.css("div.p-4 a::attr(href)").re(r".*/koop/tilburg.*")
+            huizenlinks = response.css("div.p-4 a::attr(href)").re(r".*/koop/utrecht.*")
             huizenlinks = set(huizenlinks) # remove duplicates
 
-            # bezoek alle huizenpaginas en sla ze op:zzzzzz
+            # bezoek alle huizenpaginas en sla ze op:
             for huizenlink in huizenlinks:
                 yield scrapy.Request(url=huizenlink, callback=self.parsehuis)
+                if not False in self.parsewindow:
+                
+                    self.crawler.engine.close_spider(self, f"Last {len(self.parsewindow)} items were duplicates. Stop crawling")
 
             next_page = self.nextpage(response.url)
             yield scrapy.Request(url=next_page, callback=self.parse)
-    @sync_to_async
+
     def parsehuis(self, response):
         """Gets the data specified in models.py of one house"""      
         adres = clean(response.css("span.object-header__title::text").get())
@@ -45,24 +61,26 @@ class spider(scrapy.Spider):
                 "postcode" : postcode,
                 "buurt" : buurt
               }
-        
+
         # Extracting data from Verkoopgeschiedenis section
         linkerkolom = response.css('.object-kenmerken-list dt::text').getall()
         rechterkolom = response.css('.object-kenmerken-list dd::text').getall()
-    
+        g = {}
         for links, rechts in zip(linkerkolom, rechterkolom):
             if links in ["Verkoopdatum", "Aangeboden sinds"]:
-                kenmerken[links.strip()] = parseDate(rechts.strip())
-
-        kenmerken['Verkooptijd'] = (kenmerken['Verkoopdatum'] - kenmerken['Aangeboden sinds']).days
+                g[links.strip()] = parseDate(rechts.strip())
+        kenmerken['verkoopdatum'] = g['Verkoopdatum']
+        kenmerken['aangebodensinds'] = g['Aangeboden sinds']
+        kenmerken['verkooptijd'] = (g['Verkoopdatum'] - g['Aangeboden sinds']).days
         # Extracting data from Kenmerken section
         laatste_vraagprijs = response.css('.object-kenmerken-list dt:contains("Laatste vraagprijs") + dd span::text').get()
-        kenmerken['Vraagprijs'] = laatste_vraagprijs
+        kenmerken['vraagprijs'] = laatste_vraagprijs
         # the first number group in the url
-        kenmerken['fundaID'] = re.search(r"(\d+)", response.url).group(1)
-
-        yield kenmerken
-
+        fundaID = re.search(r"(\d+)", response.url).group(1)
+        kenmerken['fundaID'] = fundaID
+        item = FundaItem(kenmerken)
+        yield item
+    
     def nextpage(self, url) -> str:
         """When given a lisnk that ends in 'search_results=[integer]', 
         this function returns that link, ending in 'search_results=[integer + 1]

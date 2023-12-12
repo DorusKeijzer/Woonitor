@@ -95,7 +95,7 @@ def analyse(request, stad):
     avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
     avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
 
-    average_prices = listings.values('verkoopdatum').annotate(avg_verkoopprijs=Avg('verkoopprijs'))
+    average_prices = listings.values('verkoopdatum').annotate(avg_verkoopprijs=Avg('vraagprijs'))
 
 
     context = {"listings": listings,

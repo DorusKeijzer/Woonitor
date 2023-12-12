@@ -40,20 +40,30 @@ class webPipeLine:
     
     @sync_to_async
     def process_item(self, item, spider):
-        myListing = Listing(
-            url = item['url'], 
-            adres = item['adres'].strip(),
-            postcode = item['postcode'],
-            stad= item['stad'].strip(),
-            buurt = item['buurt'],
-            vraagprijs = self.controlInt(item, 'Vraagprijs'),
-            datescraped = item['datescraped'],
-            aangebodensinds = item['Aangeboden sinds'],
-            verkoopdatum = item['Verkoopdatum'],
-            verkooptijd = item['Verkooptijd']
-        )
-        myListing.save()
-        return myListing
+        fundaID = item["fundaID"]
+        if not (dupe := Listing.objects.filter(fundaID=fundaID).exists()):        
+
+            myListing = Listing(
+                url = item['url'], 
+                adres = item['adres'].strip(),
+                postcode = item['postcode'],
+                stad= item['stad'].strip(),
+                buurt = item['buurt'],
+                vraagprijs = self.controlInt(item, 'vraagprijs'),
+                datescraped = item['datescraped'],
+                aangebodensinds = item['aangebodensinds'],
+                verkoopdatum = item['verkoopdatum'],
+                verkooptijd = item['verkooptijd'],
+                fundaID = item['fundaID']
+                )
+            myListing.save()
+        else:
+            spider.logger.info("Duplicate item.")
+        
+        spider.parsewindow.pop(0)
+        spider.parsewindow.append(dupe)
+        print(spider.parsewindow)
+        return item
 
 class JsonWriterPipeline:
     global firstline
