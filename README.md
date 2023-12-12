@@ -33,7 +33,7 @@ py manage.py runserver
     * ~~filteren per maand~~
     * filter per woningtype
     * filteren per buurt
-    * prijsontwikkelingen over tijd
+    * ~~prijsontwikkelingen over tijd~~
 * Scheduling
 * Implementeer uuid
 * ~~Voorkom dat de scraper reeds bezochte links nog eens scrapet~~
