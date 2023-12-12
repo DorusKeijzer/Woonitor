@@ -27,13 +27,16 @@ py manage.py runserver
 
 
 ## To do:
+* woningtype
+* maak hem iets mooier
 * Implementeer datavisualisatie met charts.js
-    * filteren per maand
+    * ~~filteren per maand~~
+    * filter per woningtype
     * filteren per buurt
-    * prijsontwikkelingen over tijd
-* Schedling
+    * ~~prijsontwikkelingen over tijd~~
+* Scheduling
 * Implementeer uuid
-* Voorkom dat de scraper reeds bezochte links nog eens scrapet
+* ~~Voorkom dat de scraper reeds bezochte links nog eens scrapet~~
 * gebruiksvriendelijk maken 
     * Eerst startlink kiezen via CMD
     * Daarna bash script
