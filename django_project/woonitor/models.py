@@ -29,7 +29,7 @@ class Listing(models.Model):
         # is postcode formatted correctly
         validators=[
             RegexValidator(
-                regex=r'^\d{4}[A-Z]{2}',
+                regex=r'^\d{4}[A-Z]{2}|^\d{4}',
                 message='Enter a valid format (e.g., 2424DD)',
                 code='invalid_format'
             ),]

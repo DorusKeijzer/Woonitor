@@ -10,7 +10,9 @@ from django.core.serializers.json import DjangoJSONEncoder
 
 def index(request):
     listings = Listing.objects.all()
-    context = {"listings": listings}
+    aantal = listings.count
+    context = {"listings": listings,
+               "aantal" : aantal}
     return render(request, "woonitor/modern.html", context)
 
 def item(request, stad, id):
@@ -36,6 +38,7 @@ def item(request, stad, id):
 
 def stad(request, stad):
     listings = Listing.objects.filter(stad=stad)
+    aantal = listings.count
     avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
     avg_prijs = f'€ {avg_prijs:,.2f}'
     avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
@@ -54,9 +57,15 @@ def stad(request, stad):
     lastmonth = listings.filter(verkoopdatum__range=[start_date, end_date])
 
     avg_prijs_lastmonth = lastmonth.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
+    if not avg_prijs_lastmonth:
+        avg_prijs_lastmonth = "N/A"
+    else:
+        avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
     avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
-    avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
+    if not avg_verkooptijd_lastmonth:
+        avg_verkooptijd_lastmonth = "N/A"
+    else:
+        avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
 
 
     context = {"listings": listings,
@@ -65,18 +74,26 @@ def stad(request, stad):
                "gemiddeldeVerkooptijd" : avg_verkooptijd,
                "vorigemaand": lastmonthname,
                "maandPrijs" : avg_prijs_lastmonth,
-               "maandTijd": avg_verkooptijd_lastmonth}
+               "maandTijd": avg_verkooptijd_lastmonth,
+               "aantal" : aantal}
     
     return render(request, "woonitor/stad.html", context)
 
 def analyse(request, stad):
     listings = Listing.objects.filter(stad=stad)
+    aantal  = listings.count
     ids = [item.id for item in listings]
 
     avg_prijs = listings.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    avg_prijs = f'€ {avg_prijs:,.2f}'
+    if not avg_prijs:
+        avg_prijs = "N/A"
+    else:
+        avg_prijs = f'€ {avg_prijs:,.2f}'
     avg_verkooptijd = listings.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
-    avg_verkooptijd = f'{avg_verkooptijd:.1f} dagen'
+    if not avg_verkooptijd:
+        avg_verkooptijd = "N/A"
+    else:
+        avg_verkooptijd = f'€ {avg_verkooptijd:,.2f}'
     
     end_date = timezone.now()
     start_date = end_date - timezone.timedelta(days=30)  # Assuming a month is approximately 30 days
@@ -91,12 +108,15 @@ def analyse(request, stad):
     lastmonth = listings.filter(verkoopdatum__range=[start_date, end_date])
 
     avg_prijs_lastmonth = lastmonth.aggregate(Avg('vraagprijs'))['vraagprijs__avg']
-    avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
+    if not avg_prijs_lastmonth:
+        avg_prijs_lastmonth = "N/A"
+    else:
+        avg_prijs_lastmonth = f'€ {avg_prijs_lastmonth:,.2f}'
     avg_verkooptijd_lastmonth = lastmonth.aggregate(Avg('verkooptijd'))['verkooptijd__avg']
-    avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
-
-    average_prices = listings.values('verkoopdatum').annotate(avg_verkoopprijs=Avg('vraagprijs'))
-
+    if not avg_verkooptijd_lastmonth:
+        avg_verkooptijd_lastmonth = "N/A"
+    else:
+        avg_verkooptijd_lastmonth = f'{avg_verkooptijd_lastmonth:.1f} dagen'
 
     context = {"listings": listings,
             "stad": stad,
@@ -104,7 +124,8 @@ def analyse(request, stad):
             "gemiddeldeVerkooptijd" : avg_verkooptijd,
             "vorigemaand": lastmonthname,
             "maandPrijs" : avg_prijs_lastmonth,
-            "maandTijd": avg_verkooptijd_lastmonth}
+            "maandTijd": avg_verkooptijd_lastmonth,
+            "aantal" : aantal}
 
     verkoopdatum_list = list(listings.values_list('verkoopdatum', flat=True))
 

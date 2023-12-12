@@ -8,7 +8,7 @@ from asgiref.sync import sync_to_async
 class spider(scrapy.Spider):
     name = "het_fundamannetje"
     # start_urls should end in "search_result=1"
-    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
+    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tilburg%22%5D&availability=%5B%22unavailable%22%5D&search_result=4"]
     # start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tiel%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
     # start_urls = [r'https://www.funda.nl/koop/verkocht/tiel/huis-42352883-dr-schaepmanstraat-47/']
     @sync_to_async  
@@ -34,8 +34,16 @@ class spider(scrapy.Spider):
     def parsehuis(self, response):
         """Gets the data specified in models.py of one house"""      
         adres = clean(response.css("span.object-header__title::text").get())
-        postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w")[0].replace(" ", "")
-        stad = clean(response.css("span.object-header__subtitle::text").re("\d{4} \w\w (.*)")[0])
+        try:
+            # 6-cijferige postcode
+            postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w")[0].replace(" ", "")
+            stad = clean(response.css("span.object-header__subtitle::text").re("\d{4} \w\w (.*)")[0])
+        except:
+
+            # 4 cijferige postcode
+            objectheader = response.css("span.object-header__subtitle::text").get().split()
+            postcode = [0]
+            stad = " ".join(objectheader[1:])
         buurt = response.css("a.fd-m-left-2xs--bp-m::text").get()
         kenmerken = { 
                 "datescraped": timezone.now(),

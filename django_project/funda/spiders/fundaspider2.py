@@ -13,18 +13,19 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'project.settings'  # Replace with your a
 import django
 django.setup()
     
-from woonitor.models import Listing
 from funda.items import FundaItem
 
 class spider(scrapy.Spider):
     name = "het_tweede_fundamannetje"
     # start_urls should end in "search_result=1"
-    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22utrecht%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
+    start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22nl%22%5D&availability=%5B%22unavailable%22%5D&sort=%22date_up%22&search_result=1"]
     # start_urls = [r"https://www.funda.nl/zoeken/koop?selected_area=%5B%22tiel%22%5D&availability=%5B%22unavailable%22%5D&search_result=1"]
     # start_urls = [r'https://www.funda.nl/koop/verkocht/tiel/huis-42352883-dr-schaepmanstraat-47/']
     
-    # keeps track of the duplicate status of the last 15 runs
-    parsewindow = [False,False,False,False,False,False,False,False,False,False,False,False,False,False,False]
+    # keeps track of the duplicate status of the last n runs
+    # if n duplicates are found in order, terminates scraping
+    n = 20
+    parsewindow = [False for n in range(n)]
     def parse(self, response):
 
         if "Geen resultaten" in response.text:
@@ -34,15 +35,14 @@ class spider(scrapy.Spider):
         else:
             # geeft alle huizenlinks op een "zoeken" page 
             # TODO fix deeplink
-            huizenlinks = response.css("div.p-4 a::attr(href)").re(r".*/koop/utrecht.*")
+            huizenlinks = response.css("div.p-4 a::attr(href)").re(r".*/koop/.*")
             huizenlinks = set(huizenlinks) # remove duplicates
 
             # bezoek alle huizenpaginas en sla ze op:
             for huizenlink in huizenlinks:
                 yield scrapy.Request(url=huizenlink, callback=self.parsehuis)
                 if not False in self.parsewindow:
-                
-                    self.crawler.engine.close_spider(self, f"Last {len(self.parsewindow)} items were duplicates. Stop crawling")
+                    self.crawler.engine.close_spider(self, f"Last {n} items were duplicates. Stopped crawling")
 
             next_page = self.nextpage(response.url)
             yield scrapy.Request(url=next_page, callback=self.parse)
@@ -50,8 +50,16 @@ class spider(scrapy.Spider):
     def parsehuis(self, response):
         """Gets the data specified in models.py of one house"""      
         adres = clean(response.css("span.object-header__title::text").get())
-        postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w")[0].replace(" ", "")
-        stad = clean(response.css("span.object-header__subtitle::text").re("\d{4} \w\w (.*)")[0])
+        try:
+            # 6-cijferige postcode
+            postcode = response.css("span.object-header__subtitle::text").re("\d{4} \w\w")[0].replace(" ", "")
+            stad = clean(response.css("span.object-header__subtitle::text").re("\d{4} \w\w (.*)")[0])
+        except:
+
+            # 4 cijferige postcode
+            objectheader = response.css("span.object-header__subtitle::text").get().split()
+            postcode = objectheader[0]
+            stad = " ".join(objectheader[1:])        
         buurt = response.css("a.fd-m-left-2xs--bp-m::text").get()
         kenmerken = { 
                 "datescraped": timezone.now(),

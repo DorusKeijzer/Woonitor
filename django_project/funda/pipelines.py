@@ -41,7 +41,7 @@ class webPipeLine:
     @sync_to_async
     def process_item(self, item, spider):
         fundaID = item["fundaID"]
-        if not (dupe := Listing.objects.filter(fundaID=fundaID).exists()):        
+        if not (dupe := Listing.objects.filter(url=item['url']).exists()):        
 
             myListing = Listing(
                 url = item['url'], 
