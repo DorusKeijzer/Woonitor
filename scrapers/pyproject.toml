@@ -10,6 +10,7 @@ python = "^3.12"
 playwright = "^1.54.0"
 parsel = "^1.10.0"
 redis = "^6.3.0"
+python-dotenv = "^1.1.1"
 
 
 [build-system]

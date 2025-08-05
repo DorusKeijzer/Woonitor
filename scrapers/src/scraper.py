@@ -7,6 +7,8 @@ from config import SCRAPER_THROTTLE_SPEED
 import redis
 import os
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -28,7 +30,17 @@ class Scraper:
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
 
+    def listen(self):
+        """Listens to the redis message queue and scrapes the listing"""
+        while True:
+            _, raw = r.blpop('listing_queue')
+            url = json.loads(raw.decode()).get("url")
+            self.logger.info(f"Got URL: {url}")
+            self.scrape(url)
+            sleep(SCRAPER_THROTTLE_SPEED)
+            
     def scrape(self, url):
+        """Scrapes all available data of the given listing and writes to the database"""
         url = "https://www.funda.nl" + url
 
         info = {}
@@ -80,5 +92,6 @@ class Scraper:
 
 if __name__ == "__main__":
     scraper = Scraper()
-    scraper.scrape("/detail/koop/tilburg/appartement-langestraat-6-02/43938990/")
+    scraper.listen()
+    # scraper.scrape("/detail/koop/tilburg/appartement-langestraat-6-02/43938990/")
     
