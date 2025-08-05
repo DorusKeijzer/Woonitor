@@ -3,7 +3,7 @@ from parsel import Selector
 from time import sleep
 import uuid
 import logging
-from config import CRAWLER_THROTTLE_SPEED
+from config import SCRAPER_THROTTLE_SPEED
 import redis
 import os
 import json
@@ -21,60 +21,64 @@ r = redis.Redis(
     password=os.getenv("REDIS_PASSWORD") or None
 )
 
-class Crawler:
+class Scraper:
     """Listens to the redis queue and scrapes information of every listing it receives"""
     def __init__(self):
         self.name= f"Crawler-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
 
-    def scrape(self):
-        page_number = 1
+    def scrape(self, url):
+        url = "https://www.funda.nl" + url
 
-        while True:
-            self.logger.info(f"Crawling page {page_number}")
-            url = self.base_url + str(page_number)
+        info = {}
 
-            with sync_playwright() as p:
-                self.logger.info(f"Making request to {url} ...")
-                browser = p.chromium.launch(headless=False)
-                page = browser.new_page()
-                page.goto(url)            
-                # wait for the page to load
-                page.wait_for_load_state("networkidle")
-                content = page.content()
-                selector = Selector(text = content)
+        self.logger.info(f"Scraping page {url}")
 
-                # gets the listing urls from the ordered list
-                urls = selector.css("div.flex.flex-col.gap-3.mt-4 a::attr(href)").getall()
+        with sync_playwright() as p:
+            self.logger.info(f"Making request to {url} ...")
+            browser = p.chromium.launch(headless=False)
+            page = browser.new_page()
+            page.goto(url)            
+            # wait for the page to load
+            page.wait_for_load_state("networkidle")
+            content = page.content()
+            selector = Selector(text = content)
 
-                # filter only listing pages while ommitting duplicates
-                urls = list(set([url for url in urls if url.startswith("/detail/")]))
-                self.logger.info(urls)
+            # --- about box --- #
+            # Contains: address, postal code, neighborhood
+            about_box = selector.css("div#about")
 
-                self.logger.info(f"Found {len(urls)} urls.")
+            info["Adres"] = about_box.css("h1 span::text").get() 
+            info["Postcode"] = about_box.css("span.text-neutral-40::text").get()
+            info["Buurt"] = about_box.css("a.ml-2.text-secondary-70::text").get()
 
-                for url in urls:
-                    listing = {
-                        "sender": self.name,
-                        "url": url,
-                        "area":  self.cleaned_area
-                    }
-                    r.rpush("listing_queue", json.dumps(listing))
+            # --- purchase history ---
+            # contains: offered since, purchase date, duration
+            purchase_history = selector.css("section.mt-6.border-b.border-neutral-20 dl div").getall()
+            for element in purchase_history:
+                key = Selector(element).css("dt::text").get()
+                value = Selector(element).css("dd::text").get()
+                info[key] = value
 
-                browser.close()
+            # --- features ---
+            # contains: most everything else
+            features = selector.css("section#features div dl").getall()
+            for element in features:
+                key = Selector(element).css("dt::text").get()
+                value = Selector(element).css("dd span::text").get()
+                info[key] = value
 
-            page_number += 1
-            self.logger.info(f"Sleeping {CRAWLER_THROTTLE_SPEED} seconds.")
-            sleep(CRAWLER_THROTTLE_SPEED)
-            if page_number == 5:
-                break
+            for key in info.keys():
+                print(f"{key}: {info[key]}")
+
+            self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
+            # sleep(SCRAPER_THROTTLE_SPEED)
+            browser.close()
+
 
 
 if __name__ == "__main__":
-    scraper = Scraper("Gemeente Tilburg")
-    scraper.scrape_links()
-
-    for l in scraper.links:
-        print(l)
+    scraper = Scraper()
+    scraper.scrape("/detail/koop/tilburg/appartement-langestraat-6-02/43938990/")
     
