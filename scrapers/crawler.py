@@ -4,6 +4,9 @@ from time import sleep
 import uuid
 import logging
 from config import CRAWLER_THROTTLE_SPEED
+import redis
+import os
+import json
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -11,13 +14,19 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+r = redis.Redis(
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT", "6379")),
+    db=int(os.getenv("REDIS_DB", "0")),
+    password=os.getenv("REDIS_PASSWORD") or None
+)
+
 class Scraper:
     """Takes the name of an area and returns all available listings in the area"""
     def __init__(self, area: str):
         self.area = area
-        cleaned_area = area.lower().replace(" ", "-")
-        self.base_url = f"https://www.funda.nl/zoeken/koop/?selected_area=[\"{cleaned_area}\"]&availability=[\"unavailable\"]&search_result="
-        self.links = []
+        self.cleaned_area = area.lower().replace(" ", "-")
+        self.base_url = f"https://www.funda.nl/zoeken/koop/?selected_area=[\"{self.cleaned_area}\"]&availability=[\"unavailable\"]&search_result="
         self.name= f"Scraper-{area}-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
@@ -47,7 +56,15 @@ class Scraper:
                 self.logger.info(urls)
 
                 self.logger.info(f"Found {len(urls)} urls.")
-                self.links.extend(urls)
+
+                for url in urls:
+                    listing = {
+                        "sender": self.name,
+                        "url": url,
+                        "area":  self.cleaned_area
+                    }
+                    r.rpush("listing_queue", json.dumps(listing))
+
                 browser.close()
 
             page_number += 1
