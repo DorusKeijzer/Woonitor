@@ -21,17 +21,17 @@ r = redis.Redis(
     password=os.getenv("REDIS_PASSWORD") or None
 )
 
-class Scraper:
+class Crawler:
     """Takes the name of an area and returns all available listings in the area"""
     def __init__(self, area: str):
         self.area = area
         self.cleaned_area = area.lower().replace(" ", "-")
         self.base_url = f"https://www.funda.nl/zoeken/koop/?selected_area=[\"{self.cleaned_area}\"]&availability=[\"unavailable\"]&search_result="
-        self.name= f"Scraper-{area}-{uuid.uuid4().hex[:6]}"
+        self.name= f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
-        self.logger.info(f"Initialized scraper {self.name}.")
+        self.logger.info(f"Initialized crawler {self.name}.")
 
-    def scrape_links(self):
+    def crawl_links(self):
         page_number = 1
 
         while True:
@@ -75,9 +75,9 @@ class Scraper:
 
 
 if __name__ == "__main__":
-    scraper = Scraper("Gemeente Tilburg")
-    scraper.scrape_links()
+    crawler = Crawler("Gemeente Tilburg")
+    crawler.crawl_links()
 
-    for l in scraper.links:
+    for l in crawler.links:
         print(l)
     
