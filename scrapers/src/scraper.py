@@ -33,7 +33,7 @@ r = redis.Redis(
 class Scraper:
     """Listens to the redis queue and scrapes information of every listing it receives"""
     def __init__(self):
-        self.name= f"Crawler-{uuid.uuid4().hex[:6]}"
+        self.name= f"Scraper-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
 
