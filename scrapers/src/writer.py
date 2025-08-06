@@ -3,6 +3,7 @@ import logging
 import os
 import psycopg
 import redis
+import uuid
 
 from dotenv import load_dotenv
 from time import sleep
@@ -39,4 +40,22 @@ except psycopg.OperationalError as e:
     raise e 
 
 class Writer:
-    ... 
+    def __init__(self):
+        self.name= f"Writer-{uuid.uuid4().hex[:6]}"
+        self.logger = logging.getLogger(self.name)
+        self.logger.info(f"Initialized writer {self.name}.")
+
+    def listen(self):
+        """Listens to the redis message queue and stores listing data in memory"""
+        while True:
+            _, raw = r.brpop('listing_queue')
+            message = json.loads(raw.decode())
+
+
+    def write(self, listings):
+        ...
+
+
+if __name__ == "__main__":
+    writer = Writer()
+    writer.listen()

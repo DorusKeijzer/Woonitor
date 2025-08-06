@@ -29,22 +29,6 @@ r = redis.Redis(
     password=os.getenv("REDIS_PASSWORD") or None
 )
 
-# postgres conncetion
-
-print("Connecting to postgres")
-try: 
-    conn = psycopg.connect(f"host={os.getenv("POSTGRES_HOST")} \
-                    connect_timeout=10 \
-                    dbname={os.getenv("POSTGRES_DB")}\
-                    user={os.getenv("POSTGRES_USER")}\
-                    password={os.getenv("POSTGRES_PASSWORD")}")
-    print("connection: ", conn)
-
-except psycopg.OperationalError as e:
-    print("connection failed")
-    raise e 
-
-
 class Scraper:
     """Listens to the redis queue and scrapes information of every listing it receives"""
     def __init__(self):
