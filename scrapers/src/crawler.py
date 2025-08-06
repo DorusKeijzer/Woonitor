@@ -1,13 +1,15 @@
-from playwright.sync_api import sync_playwright
-from parsel import Selector
-from time import sleep
-import uuid
-import logging
-from config import CRAWLER_THROTTLE_SPEED
-import redis
-import os
 import json
+import logging
+import os
+import redis
+import uuid
+
 from dotenv import load_dotenv
+from parsel import Selector
+from playwright.sync_api import sync_playwright
+from time import sleep
+
+from config import CRAWLER_THROTTLE_SPEED
 load_dotenv()   
 
 logging.basicConfig(
@@ -65,7 +67,7 @@ class Crawler:
                         "url": url,
                         "area":  self.cleaned_area
                     }
-                    r.rpush("listing_queue", json.dumps(listing))
+                    r.lpush("listing_queue", json.dumps(listing))
 
                 browser.close()
 

@@ -1,27 +1,49 @@
-from playwright.sync_api import sync_playwright
-from parsel import Selector
-from time import sleep
-import uuid
-import logging
-from config import SCRAPER_THROTTLE_SPEED
-import redis
-import os
 import json
+import logging
+import os
+import psycopg
+import redis
+import uuid
+
 from dotenv import load_dotenv
+from parsel import Selector
+from playwright.sync_api import sync_playwright
+from time import sleep
+
+from config import SCRAPER_THROTTLE_SPEED
+
 load_dotenv()
 
+# logging 
 logging.basicConfig(
     level=logging.INFO,  
     format='[%(asctime)s] [%(levelname)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+# redis connection
 r = redis.Redis(
     host=os.getenv("REDIS_HOST"),
     port=int(os.getenv("REDIS_PORT", "6379")),
     db=int(os.getenv("REDIS_DB", "0")),
     password=os.getenv("REDIS_PASSWORD") or None
 )
+
+# postgres conncetion
+
+print("Connecting to postgres")
+try: 
+    conn = psycopg.connect(f"host={os.getenv("POSTGRES_HOST")} \
+                    connect_timeout=10 \
+                    dbname={os.getenv("POSTGRES_DB")}\
+                    user={os.getenv("POSTGRES_USER")}\
+                    password={os.getenv("POSTGRES_PASSWORD")}")
+    print("connection: ", conn)
+
+except psycopg.OperationalError as e:
+    print("connection failed")
+    raise e 
+
 
 class Scraper:
     """Listens to the redis queue and scrapes information of every listing it receives"""
@@ -31,9 +53,9 @@ class Scraper:
         self.logger.info(f"Initialized scraper {self.name}.")
 
     def listen(self):
-        """Listens to the redis message queue and scrapes the listing"""
+        """Listens to the redis message queue and scrapes the listings it receives"""
         while True:
-            _, raw = r.blpop('listing_queue')
+            _, raw = r.brpop('listing_queue')
             url = json.loads(raw.decode()).get("url")
             self.logger.info(f"Got URL: {url}")
             self.scrape(url)
@@ -52,6 +74,7 @@ class Scraper:
             browser = p.chromium.launch(headless=False)
             page = browser.new_page()
             page.goto(url)            
+
             # wait for the page to load
             page.wait_for_load_state("networkidle")
             content = page.content()
@@ -65,7 +88,7 @@ class Scraper:
             info["Postcode"] = about_box.css("span.text-neutral-40::text").get()
             info["Buurt"] = about_box.css("a.ml-2.text-secondary-70::text").get()
 
-            # --- purchase history ---
+            # --- purchase history --- #
             # contains: offered since, purchase date, duration
             purchase_history = selector.css("section.mt-6.border-b.border-neutral-20 dl div").getall()
             for element in purchase_history:
@@ -73,7 +96,7 @@ class Scraper:
                 value = Selector(element).css("dd::text").get()
                 info[key] = value
 
-            # --- features ---
+            # --- features --- #
             # contains: most everything else
             features = selector.css("section#features div dl").getall()
             for element in features:
@@ -84,9 +107,10 @@ class Scraper:
             for key in info.keys():
                 print(f"{key}: {info[key]}")
 
-            self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
-            # sleep(SCRAPER_THROTTLE_SPEED)
             browser.close()
+            self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
+
+            sleep(SCRAPER_THROTTLE_SPEED)
 
 
 
