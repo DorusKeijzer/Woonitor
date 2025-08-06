@@ -27,7 +27,7 @@ CREATE TABLE listings (
 CREATE INDEX idx_funda_id ON listings(funda_id);
 CREATE INDEX idx_scraped_at ON listings(scraped_at);
 CREATE INDEX idx_sell_date ON listings(sell_date);
-CREATE INDEX idx_offer_date ON listings(offer_date);
+CREATE INDEX idx_offer_date ON listings(offer_since);
 
 -- location indices --
 CREATE INDEX idx_city ON listings(city);
