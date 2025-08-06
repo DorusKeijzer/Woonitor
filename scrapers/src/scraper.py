@@ -93,7 +93,9 @@ class Scraper:
 
             browser.close()
             self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
+            r.lpush("data_queue", json.dumps(info))
 
+            # sleep to obey request limit
             sleep(SCRAPER_THROTTLE_SPEED)
 
 

@@ -46,11 +46,18 @@ class Writer:
         self.logger.info(f"Initialized writer {self.name}.")
 
     def listen(self):
-        """Listens to the redis message queue and stores listing data in memory"""
+        """Listens to the redis message queue, stores listing data in memory and writes to db occasionally"""
         while True:
-            _, raw = r.brpop('listing_queue')
+            _, raw = r.brpop('data_queue')
             message = json.loads(raw.decode())
 
+    def validate(self, transformed_message: Json)-> bool:
+        """Ensures that the transformed information has the correct format"""
+        ...
+
+    def transform(self, message: Json) -> Json:
+        """Transforms the scraped information to obey the database schema"""
+        ...
 
     def write(self, listings):
         ...
