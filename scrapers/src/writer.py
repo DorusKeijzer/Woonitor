@@ -9,7 +9,8 @@ import uuid
 from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 from psycopg import sql
-from psycopg.extras import execute_values
+from psycopg.types.json import Json
+from time import time
 from typing import Dict, Tuple, Optional, Any
 
 from config import BATCH_SIZE
@@ -50,36 +51,102 @@ class Writer:
         self.name= f"Writer-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized writer {self.name}.")
+        self.conn = conn
+
+    def test_write_from_queue_snapshot(self):
+        self.logger.info("Peeking at data_queue...")
+        raw_items = r.lrange('data_queue', 0, -1)
+
+        listings = []
+        for raw in raw_items:
+            try:
+                message = json.loads(raw.decode())
+                if self.validate_input(message):
+                    transformed = self.transform(message)
+                    if self.validate_output(transformed):
+                        listings.append(transformed)
+            except Exception as e:
+                self.logger.error(f"Failed to process raw item: {e}")
+
+        if listings:
+            self.write(listings)
+        else:
+            self.logger.info("No valid listings found in queue")
+
 
     def listen(self):
-        """Listens to the redis message queue, stores listing data in memory and writes to db occasionally"""
         batch = []
+        last_flush = time()
 
         while True:
-            _, raw = r.brpop('data_queue', timeout=5)
-            message = json.loads(raw.decode())
-            if self.validate_input(message):
-                self.logger.info("Input validated. Transforming message...")
+            try:
+                self.logger.info("Fetching item from queue...")
+                item = r.brpop('data_queue', timeout=5)
+                if item:
+                    _, raw = item
+                    message = json.loads(raw.decode())
+                    if self.validate_input(message):
+                        self.logger.info("Input valid. Transforming message...")
 
-                transformed_message = self.transform(message)
+                        transformed = self.transform(message)
 
-                output_validation = self.validate_output(transformed_message)
+                        if self.validate_output(transformed):
+                            self.logger.info("Output valid")
+                            batch.append(transformed)
+                        else:
+                            self.logger.info("Output invalid")
+                    else:
+                        self.logger.info("Input invalid, moving on to next item.")
+            except Exception as e:
+                self.logger.error(f"Queue read or transform failed: {e}")
 
+            # Flush if batch is large enough or time passed
+            if len(batch) >= BATCH_SIZE or (time() - last_flush) > 10:
+                if batch:
+                    self.write(batch)
+                    batch = []
+                    last_flush = time()
 
-                if output_validation:
-                    self.logger.info(f"Output valid")
-                    batch.append(transformed_message)
-                else:
-                    self.logger.info(f"Output invalid")
-            else:
-                self.logger.info("Input invalid")
-
-            if len(batch) >= BATCH_SIZE:
-                self.write(batch)
-                batch = []
 
     def write(self, listings: list[dict]):
-        pass
+        if not listings:
+            return
+
+        columns = list(listings[0].keys())
+
+        # Wrap misc_data in Json for proper psycopg3 adaptation
+        values = []
+        for listing in listings:
+            row = []
+            for col in columns:
+                value = listing[col]
+                if col == "misc_data" and isinstance(value, dict):
+                    row.append(Json(value))
+                else:
+                    row.append(value)
+            values.append(row)
+
+        placeholders = sql.SQL(', ').join(sql.Placeholder() * len(columns))
+
+        insert_query = sql.SQL("""
+            INSERT INTO listings ({fields})
+            VALUES ({placeholders})
+            ON CONFLICT (funda_id)
+            DO NOTHING
+        """).format(
+            fields=sql.SQL(', ').join(map(sql.Identifier, columns)),
+            placeholders=placeholders
+        )
+
+        try:
+            with self.conn.cursor() as cur:
+                cur.executemany(insert_query, values)
+            self.conn.commit()
+            self.logger.info(f"Wrote batch of {len(listings)} listings to database")
+        except Exception as e:
+            self.logger.error(f"Failed to write batch: {e}")
+            self.conn.rollback()
+
 
     def reduce_to_int(self, string: str) -> int:
         """Reduce a string to just the numbers in the string and store as integer."""
@@ -284,4 +351,5 @@ class Writer:
 
 if __name__ == "__main__":
     writer = Writer()
-    writer.listen()
+    writer.test_write_from_queue_snapshot()
+    # writer.listen()

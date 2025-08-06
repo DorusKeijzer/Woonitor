@@ -11,7 +11,7 @@ playwright = "^1.54.0"
 parsel = "^1.10.0"
 redis = "^6.3.0"
 python-dotenv = "^1.1.1"
-psycopg = {extras = ["binary"], version = "^3.2.9"}
+psycopg = {extras = ["binary", "pool"], version = "^3.2.9"}
 
 
 [build-system]
