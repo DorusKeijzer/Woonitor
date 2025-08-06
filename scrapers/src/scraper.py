@@ -50,9 +50,11 @@ class Scraper:
         """Scrapes all available data of the given listing and writes to the database"""
         url = "https://www.funda.nl" + url
 
-        funda_id = url.split("/")[-1]
+        # take the penultimate part of the url when split at /
+        # e.g. .../tilburg/appartement-de-fabrikant-type-c1-bouwnr-28/43859373/' -> [... 'tilburg', 'appartement-de-fabrikant-type-c1-bouwnr-28', '43859373', '']
+        funda_id = url.split("/")[-2] 
 
-        info = {"Funda ID" : funda_id, "Url": url, "Scraped at" : datetime.now}
+        info = {"funda_id" : funda_id, "url": url, "scraped_at" : datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
         self.logger.info(f"Scraping page {url}")
 
@@ -95,10 +97,10 @@ class Scraper:
                 print(f"{key}: {info[key]}")
 
             browser.close()
-            self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
             r.lpush("data_queue", json.dumps(info))
 
-            # sleep to obey request limit
+            # sleep for a while
+            self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
             sleep(SCRAPER_THROTTLE_SPEED)
 
 

@@ -6,8 +6,10 @@ import re
 import redis
 import uuid
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
+from psycopg import sql
+from psycopg.extras import execute_values
 from typing import Dict, Tuple, Optional, Any
 
 from config import BATCH_SIZE
@@ -54,23 +56,34 @@ class Writer:
         batch = []
 
         while True:
-            # _, raw = r.brpop('data_queue', timeout=5)
-            raw = r.lrange('data_queue', 0, 0)[0]
+            _, raw = r.brpop('data_queue', timeout=5)
             message = json.loads(raw.decode())
-            transformed_message = self.transform(message)
+            if self.validate_input(message):
+                self.logger.info("Input validated. Transforming message...")
 
-            if self.validate(transformed_message):
-                batch.append(transformed_message)    
+                transformed_message = self.transform(message)
+
+                output_validation = self.validate_output(transformed_message)
+
+
+                if output_validation:
+                    self.logger.info(f"Output valid")
+                    batch.append(transformed_message)
+                else:
+                    self.logger.info(f"Output invalid")
             else:
-                print(f"Message {transformed_message} did not pass validation step")
+                self.logger.info("Input invalid")
 
             if len(batch) >= BATCH_SIZE:
                 self.write(batch)
                 batch = []
 
+    def write(self, listings: list[dict]):
+        pass
+
     def reduce_to_int(self, string: str) -> int:
         """Reduce a string to just the numbers in the string and store as integer."""
-        return int("".join([element for element in string if element.isdigit()]))
+        return int("".join([element for element in string if element in "0123456789"]))
 
     def parse_rooms(self, text: str) -> Tuple[int, Optional[int]]:
         """
@@ -92,7 +105,7 @@ class Writer:
 
         return (total_rooms, bedrooms)
 
-    def to_date(self, string: str) -> date:
+    def to_date(self, date_str: str) -> date:
         """Reduce string to a date"""
         months = {
             "januari": 1,
@@ -122,9 +135,79 @@ class Writer:
 
         return date(year, month, day)
 
-    def validate(self, transformed_message: dict)-> bool:
+    def split_postcode_city(self, postcode_str: str) -> Tuple[str, str]:
+        """
+        Splits a Dutch-style postcode and city string into postcode and city.
+
+        Example:
+            "5035 DD Tilburg" -> ("5035 DD", "Tilburg")
+
+        Assumes input always has exactly 3 parts.
+        """
+        parts = postcode_str.strip().split()
+        postcode = f"{parts[0]} {parts[1]}"
+        city = parts[2]
+        return postcode, city
+
+    def validate_input(self, message) -> bool:
+        required_fields = ["funda_id", "url", "scraped_at", "Postcode"]
+        missing = [f for f in required_fields if f not in message]
+
+        if missing != []:
+            return False
+
+        for f in required_fields:
+            if message.get(f) is None:
+                return False
+
+
+        return True
+
+
+    def validate_output(self, transformed_message: dict) -> bool:
         """Ensures that the transformed information has the correct format"""
-        ...
+
+        required_fields = {
+            "funda_id": str,
+            "title": str,
+            "last_asking_price": int,
+            "surface_area": int,
+            "total_rooms": int,
+            "listing_type": str,
+            "sell_date": date,
+            "offer_since": date,
+            "sell_duration": timedelta,
+            "city": str,  # Only if you're including this
+            "postcode": str,
+            "neighborhood": str,
+            "energy_label": str,
+            "building_year": (date, type(None)),
+            "scraped_at": datetime,
+            "url": str,
+            "misc_data": dict,
+        }
+
+        optional_fields = {
+            "bedrooms": (int, type(None)),
+        }
+
+        # Check required fields
+        for field, expected_type in required_fields.items():
+            if field not in transformed_message:
+                self.logger.info(f"Missing required field: {field}")
+                return False
+            if not isinstance(transformed_message[field], expected_type):
+                self.logger.info(f"Invalid type for field '{field}': expected {expected_type}, got {type(transformed_message[field])}")
+                return False
+
+        # Check optional fields
+        for field, expected_type in optional_fields.items():
+            if field in transformed_message and not isinstance(transformed_message[field], expected_type):
+                self.logger.info(f"Invalid type for optional field '{field}': expected {expected_type}, got {type(transformed_message[field])}")
+                return False
+
+        return True
+
                 
     def transform(self, message: Dict[str, str]) -> Dict[str, str | int | date | Any]:
         """Transforms scraped listing data to fit the database schema."""
@@ -141,15 +224,20 @@ class Writer:
             result["total_rooms"] = total
             result["bedrooms"] = bedrooms
 
+        postcode, city = self.split_postcode_city(message["Postcode"])
+
+        result["postcode"] = postcode
+        result["city"] = city
+
         # Field mapping: source -> target
         field_map = {
-            "Adres": "title",
+            "Titel": "title",
             "Laatste vraagprijs": "last_asking_price",
             "Gebruiksoppervlakten": "surface_area",
             "Soort appartement": "listing_type",
+            "Soort woonhuis": "listing_type",
             "Verkoopdatum": "sell_date",
             "Aangeboden sinds": "offer_since",
-            "Postcode": "postcode",
             "Buurt": "neighborhood",
             "Energielabel": "energy_label",
             "Bouwjaar": "building_year"
@@ -171,52 +259,28 @@ class Writer:
             else:
                 result[dst] = value
 
+        # Ensure building year exists (even though it might be none)
+        if result.get("building_year") is None:
+            result["building_year"] = None
+
         # Derived duration field
         if result.get("sell_date") and result.get("offer_since"):
             result["sell_duration"] = result["sell_date"] - result["offer_since"]
 
         # Add all remaining fields to misc_data
+        # These fields are either used or inferred from other data
         used_keys = set(field_map.keys()) | {
-            "Aantal kamers", "funda_id", "url", "scraped_at"
+            "Aantal kamers", "funda_id", "url", "scraped_at", "Postcode", "postcode", "Looptijd", "city"
         }
+
+        # wrangle scraped_at into a datetime
+        result["scraped_at"] = datetime.strptime(result["scraped_at"], "%Y-%m-%d %H:%M:%S")
+
         result["misc_data"] = {
             k: v for k, v in message.items() if k not in used_keys
         }
 
         return result
-
-
-
- #
-# CREATE TABLE listings (
-#     id SERIAL PRIMARY KEY,
-#     funda_id TEXT UNIQUE NOT NULL,  -- Funda's listing ID
-#     title TEXT,                     -- The title of the page on funda
-#     last_asking_price INTEGER,      
-#     surface_area NUMERIC,           -- Main surface area (?)
-#     bedrooms INTEGER, 
-#     total_rooms INTEGER, 
-#     listing_type TEXT,              -- House, apartment, etc.
-#     sell_date DATE,
-#     offer_since DATE,               -- listed since
-#     sell_duration INTERVAL,         -- time between offer date and sell date
-#     city TEXT,  
-#     postcode TEXT, 
-#     neighborhood TEXT, 
-#     energy_label TEXT,
-#     building_year DATE,
-#     scraped_at TIMESTAMP NOT NULL,
-#     url TEXT,
-#     misc_data JSONB                   -- Other data from the listing
-# );
-
-       
-
-
-
-    def write(self, listings: list[dict]):
-        ...
-
 
 if __name__ == "__main__":
     writer = Writer()

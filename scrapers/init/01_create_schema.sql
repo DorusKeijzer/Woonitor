@@ -1,3 +1,5 @@
+
+
 CREATE TABLE listings (
     id SERIAL PRIMARY KEY,
     funda_id TEXT UNIQUE NOT NULL,  -- Funda's listing ID
@@ -5,7 +7,7 @@ CREATE TABLE listings (
     last_asking_price INTEGER,      
     surface_area NUMERIC,           -- Main surface area (?)
     bedrooms INTEGER, 
-    bathrooms INTEGER, 
+    total_rooms INTEGER, 
     listing_type TEXT,              -- House, apartment, etc.
     sell_date DATE,
     offer_since DATE,               -- listed since
@@ -14,7 +16,7 @@ CREATE TABLE listings (
     postcode TEXT, 
     neighborhood TEXT, 
     energy_label TEXT,
-    building_year TIMESTAMP,
+    building_year DATE,
     scraped_at TIMESTAMP NOT NULL,
     url TEXT,
     misc_data JSONB                   -- Other data from the listing
