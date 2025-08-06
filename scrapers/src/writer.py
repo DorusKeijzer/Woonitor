@@ -13,7 +13,7 @@ from psycopg.types.json import Json
 from time import time
 from typing import Dict, Tuple, Optional, Any
 
-from config import BATCH_SIZE
+from config import BATCH_SIZE, FLUSH_TIME_LIMIT
 
 load_dotenv()
 
@@ -53,27 +53,6 @@ class Writer:
         self.logger.info(f"Initialized writer {self.name}.")
         self.conn = conn
 
-    def test_write_from_queue_snapshot(self):
-        self.logger.info("Peeking at data_queue...")
-        raw_items = r.lrange('data_queue', 0, -1)
-
-        listings = []
-        for raw in raw_items:
-            try:
-                message = json.loads(raw.decode())
-                if self.validate_input(message):
-                    transformed = self.transform(message)
-                    if self.validate_output(transformed):
-                        listings.append(transformed)
-            except Exception as e:
-                self.logger.error(f"Failed to process raw item: {e}")
-
-        if listings:
-            self.write(listings)
-        else:
-            self.logger.info("No valid listings found in queue")
-
-
     def listen(self):
         batch = []
         last_flush = time()
@@ -101,7 +80,7 @@ class Writer:
                 self.logger.error(f"Queue read or transform failed: {e}")
 
             # Flush if batch is large enough or time passed
-            if len(batch) >= BATCH_SIZE or (time() - last_flush) > 10:
+            if len(batch) >= BATCH_SIZE or (time() - last_flush) > FLUSH_TIME_LIMIT:
                 if batch:
                     self.write(batch)
                     batch = []
@@ -351,5 +330,4 @@ class Writer:
 
 if __name__ == "__main__":
     writer = Writer()
-    writer.test_write_from_queue_snapshot()
-    # writer.listen()
+    writer.listen()

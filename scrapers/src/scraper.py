@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 from random import random, choice
 from time import sleep
 
-from config import SCRAPER_THROTTLE_SPEED, SCRAPER_THROTTLE_SPEED_MIN, SCRAPER_THROTTLE_SPEED_MAX
+from config import SCRAPER_THROTTLE_SPEED_MIN, SCRAPER_THROTTLE_SPEED_MAX
 
 load_dotenv()
 
@@ -45,7 +45,6 @@ class Scraper:
             url = json.loads(raw.decode()).get("url")
             self.logger.info(f"Got URL: {url}")
             self.scrape(url)
-            sleep(SCRAPER_THROTTLE_SPEED)
             
     def scrape(self, url):
         """Scrapes all available data of the given listing and writes to the database"""
