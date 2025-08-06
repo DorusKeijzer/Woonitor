@@ -1,7 +1,7 @@
 Here live the crawlers and scrapers. The crawler's role is to find urls for a given region, the scraper's role is the visit those crawled urls and to return the info of the listing. These are orchestrated using [docker-compose](https://docs.docker.com/compose/), and work can (optionally) be distributed between multiple machines, you just need to choose which machine performs which task.
 
 # Getting started
-First clone this repo to every machine you are using, then determine which machine will host the message queue and database that the crawlers write to and create `.env` files according to the instructions below. If you have just one machine at your disposal, use that as the message queue host.
+First clone this repo to every machine you are using, then determine which machine will host the message queue and database that the crawlers write to. This should be 1 and no more than 1 machine. If you have made your decision, create the `.env` files according to the instructions below. If you have just one machine at your disposal, use that as the message queue host.
 
 ## .env files
 
