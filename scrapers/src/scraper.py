@@ -9,9 +9,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
+from random import random, choice
 from time import sleep
 
-from config import SCRAPER_THROTTLE_SPEED
+from config import SCRAPER_THROTTLE_SPEED, SCRAPER_THROTTLE_SPEED_MIN, SCRAPER_THROTTLE_SPEED_MAX
 
 load_dotenv()
 
@@ -56,12 +57,25 @@ class Scraper:
 
         info = {"funda_id" : funda_id, "url": url, "scraped_at" : datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-        self.logger.info(f"Scraping page {url}")
+
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.170 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:117.0) Gecko/20100101 Firefox/117.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13.5; rv:117.0) Gecko/20100101 Firefox/117.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+            "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        ]
+        ua = choice(user_agents)
+
+        self.logger.info(f"Scraping page {url} with user agent {ua}")
 
         with sync_playwright() as p:
             self.logger.info(f"Making request to {url} ...")
             browser = p.chromium.launch(headless=False)
-            page = browser.new_page()
+            context = browser.new_context(user_agent=ua)
+            page = context.new_page()
             page.goto(url)            
 
             # wait for the page to load
@@ -100,8 +114,9 @@ class Scraper:
             r.lpush("data_queue", json.dumps(info))
 
             # sleep for a while
-            self.logger.info(f"Sleeping {SCRAPER_THROTTLE_SPEED} seconds.")
-            sleep(SCRAPER_THROTTLE_SPEED)
+            sleeptime = random() * (SCRAPER_THROTTLE_SPEED_MAX - SCRAPER_THROTTLE_SPEED_MIN) + SCRAPER_THROTTLE_SPEED_MIN
+            self.logger.info(f"Sleeping {sleeptime} seconds.")
+            sleep(sleeptime)
 
 
 
