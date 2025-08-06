@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  streamlit:
+    image: woonitor-streamlit  # your built image name, or use build if you want
+    build:
+      context: ./  # path to your Streamlit app Dockerfile directory
+    ports:
+      - "8501:8501"
+    networks:
+      - woonitor-net
+    environment:
+      - DATABASE_HOST=postgres_db
+      - DATABASE_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - postgres_db
+      - redis
+
+networks:
+  woonitor-net:
+    external: true
+
