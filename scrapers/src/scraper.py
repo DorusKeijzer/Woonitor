@@ -5,6 +5,7 @@ import psycopg
 import redis
 import uuid
 
+from datetime import datetime
 from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
@@ -49,7 +50,9 @@ class Scraper:
         """Scrapes all available data of the given listing and writes to the database"""
         url = "https://www.funda.nl" + url
 
-        info = {}
+        funda_id = url.split("/")[-1]
+
+        info = {"Funda ID" : funda_id, "Url": url, "Scraped at" : datetime.now}
 
         self.logger.info(f"Scraping page {url}")
 
@@ -68,7 +71,7 @@ class Scraper:
             # Contains: address, postal code, neighborhood
             about_box = selector.css("div#about")
 
-            info["Adres"] = about_box.css("h1 span::text").get() 
+            info["Titel"] = about_box.css("h1 span::text").get() 
             info["Postcode"] = about_box.css("span.text-neutral-40::text").get()
             info["Buurt"] = about_box.css("a.ml-2.text-secondary-70::text").get()
 
