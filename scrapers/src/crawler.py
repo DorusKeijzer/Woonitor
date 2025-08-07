@@ -95,9 +95,7 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    crawler = Crawler("Gemeente Tilburg")
+    crawler = Crawler("Gemeente Utrecht")
     crawler.crawl_links()
 
-    for l in crawler.links:
-        print(l)
     
