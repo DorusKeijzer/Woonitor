@@ -8,10 +8,10 @@ First clone this repo to every machine you are using, then determine which machi
 ## .env files
 
 ### On the database host
-Create `.env` file according to `.env.template` and set `POSTGRES_HOST` to `localhost`. Make sure that the postgres port (default: 5432) is exposed to every other machine and your firewall does not block their access.
+Create `.env` file according to `.env.template` and set `POSTGRES_HOST` to `database`. Make sure that the postgres port (default: 5432) is exposed to every other machine and your firewall does not block their access.
 
 ### On the message queue host 
-Create `.env` file according to `.env.template` and set `REDIS_HOST` to `localhost`. Make sure that the redis port (default: 6379) is exposed to every other machine and your firewall does not block their access.
+Create `.env` file according to `.env.template` and set `REDIS_HOST` to `message_queue`. Make sure that the redis port (default: 6379) is exposed to every other machine and your firewall does not block their access.
 
 ### On the non-database/message queue machines
 Create `.env` file according to `.env.template` and set `REDIS_HOST` and `POSTGRES_HOST` to respectively the IP address of the message queue machine and the database host machine. 
