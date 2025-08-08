@@ -93,7 +93,7 @@ class Writer:
 
         columns = list(listings[0].keys())
 
-        # Wrap misc_data in Json for proper psycopg3 adaptation
+        # Wrap misc_data in Json 
         values = []
         for listing in listings:
             row = []

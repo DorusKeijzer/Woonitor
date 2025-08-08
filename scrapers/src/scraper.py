@@ -92,6 +92,16 @@ class Scraper:
             content = page.content()
             selector = Selector(text = content)
 
+            title = selector.css("title::text").get()
+            self.logger.info(f"Page title: {title}")
+            print(type(title))
+
+            # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
+            # and a captcha if it suspect bot activity
+            if title and "Je bent bijna op de pagina die" in title:
+                self.logger.info("Exiting because served captcha page")
+                exit(1)
+            
             # --- about box --- #
             # Contains: address, postal code, neighborhood
             about_box = selector.css("div#about")

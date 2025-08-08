@@ -57,7 +57,7 @@ class Crawler:
 
             with sync_playwright() as p:
                 self.logger.info(f"Making request to {url} with user agent {ua} ...")
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=True)
                 context = browser.new_context(user_agent=ua)
                 page = context.new_page()
                 response = page.goto(url)            
@@ -72,6 +72,18 @@ class Crawler:
                 page.wait_for_load_state("networkidle")
                 content = page.content()
                 selector = Selector(text = content)
+                
+                title = selector.css("title::text").get()
+                self.logger.info(f"Page title: {title}")
+                print(type(title))
+
+                # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
+                # and a captcha if it suspect bot activity
+                if title and "Je bent bijna op de pagina die" in title:
+                    self.logger.info("Exiting because served captcha page")
+                    exit(1)
+                
+                
 
                 # gets the listing urls from the ordered list
                 urls = selector.css("div.flex.flex-col.gap-3.mt-4 a::attr(href)").getall()
