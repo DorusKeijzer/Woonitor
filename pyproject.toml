@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "scrapers"
+version = "0.1.0"
+description = ""
+authors = ["Dorus <doruskeijzer@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+playwright = "^1.54.0"
+parsel = "^1.10.0"
+redis = "^6.3.0"
+python-dotenv = "^1.1.1"
+psycopg = {extras = ["binary", "pool"], version = "^3.2.9"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
