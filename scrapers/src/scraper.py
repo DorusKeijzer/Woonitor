@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
 from random import random, choice
+from sys import exit
 from time import sleep
 
 from config import SCRAPER_THROTTLE_SPEED_MIN, SCRAPER_THROTTLE_SPEED_MAX
@@ -75,7 +76,16 @@ class Scraper:
             browser = p.chromium.launch(headless=False)
             context = browser.new_context(user_agent=ua)
             page = context.new_page()
-            page.goto(url)            
+            response = page.goto(url)            
+            if response:
+                self.logger.info(f"Response status: {response.status}")
+
+                if response.status in [403,429]:
+                    self.logger.info(f"Exiting because of encountering status code {response.status}")
+                    exit(1)
+
+            else:
+                self.logger.info(f"Response is empty")
 
             # wait for the page to load
             page.wait_for_load_state("networkidle")
@@ -96,7 +106,8 @@ class Scraper:
             for element in purchase_history:
                 key = Selector(element).css("dt::text").get()
                 value = Selector(element).css("dd::text").get()
-                info[key] = value
+                if key:
+                    info[key] = value
 
             # --- features --- #
             # contains: most everything else
@@ -104,7 +115,8 @@ class Scraper:
             for element in features:
                 key = Selector(element).css("dt::text").get()
                 value = Selector(element).css("dd span::text").get()
-                info[key] = value
+                if key:
+                    info[key] = value
 
             for key in info.keys():
                 print(f"{key}: {info[key]}")

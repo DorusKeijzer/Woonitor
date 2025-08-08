@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
 from random import random, choice
+from sys import exit
 from time import sleep
 
 from config import CRAWLER_THROTTLE_SPEED_MAX, CRAWLER_THROTTLE_SPEED_MIN
@@ -59,7 +60,14 @@ class Crawler:
                 browser = p.chromium.launch(headless=False)
                 context = browser.new_context(user_agent=ua)
                 page = context.new_page()
-                page.goto(url)            
+                response = page.goto(url)            
+                if response:
+                    self.logger.info(f"Response status: {response.status}")
+                    if response.status in [403,429]:
+                        self.logger.info(f"Exiting because of encountering status code {response.status}")
+                        exit(1)
+                else:
+                    self.logger.info(f"Response is empty")
                 # wait for the page to load
                 page.wait_for_load_state("networkidle")
                 content = page.content()
