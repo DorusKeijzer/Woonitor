@@ -7,6 +7,7 @@ import uuid
 from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
+from prometheus_client import CollectionRegistry, Gauge, Counter, push_to_gateway
 from random import random, choice
 from sys import exit
 from time import sleep
@@ -27,6 +28,11 @@ r = redis.Redis(
     password=os.getenv("REDIS_PASSWORD") or None
 )
 
+# prometheus stuff
+PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
+job_name = "Crawler"
+registry = CollectionRegistry()
+
 class Crawler:
     """Takes the name of an area and returns all available listings in the area"""
     def __init__(self, area: str):
@@ -36,6 +42,12 @@ class Crawler:
         self.name= f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized crawler {self.name}.")
+        # prometheus information
+        self.new_pages_found = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
+        self.status_200 = Counter('status_200', 'Number of 200 responses', registry=registry)
+        self.status_403 = Counter('status_403', 'Number of 403 responses', registry=registry)
+        self.status_429 = Counter('status_429', 'Number of 429 responses', registry=registry)
+        self.captchas = Counter('captchas', 'Number of captchas served', registry=registry)
 
     def crawl_links(self):
         page_number = 1
@@ -63,9 +75,16 @@ class Crawler:
                 response = page.goto(url)            
                 if response:
                     self.logger.info(f"Response status: {response.status}")
-                    if response.status in [403,429]:
-                        self.logger.info(f"Exiting because of encountering status code {response.status}")
-                        exit(1)
+                    if response.status == 200:
+                        self.status_200.inc(1)
+                    if response.status == 403:
+                        self.status_403.inc(1)
+                    if response.status == 429:
+                        self.status_429.inc(1)
+
+                    # if response.status in [403,429]:
+                        # self.logger.info(f"Exiting because of encountering status code {response.status}")
+                        # exit(1)
                 else:
                     self.logger.info(f"Response is empty")
                 # wait for the page to load
@@ -80,8 +99,10 @@ class Crawler:
                 # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
                 # and a captcha if it suspect bot activity
                 if title and "Je bent bijna op de pagina die" in title:
-                    self.logger.info("Exiting because served captcha page")
-                    exit(1)
+                    self.captchas.inc(1)
+
+                    # self.logger.info("Exiting because served captcha page")
+                    # exit(1)
                 
                 
 
@@ -101,6 +122,9 @@ class Crawler:
                         "area":  self.cleaned_area
                     }
                     r.lpush("listing_queue", json.dumps(listing))
+
+                self.new_pages_found.inc(len(urls))
+                push_to_gateway(PUSHGATEWAY_URL, job=job_name, instance= self.name, registry=registry)
 
                 browser.close()
 
