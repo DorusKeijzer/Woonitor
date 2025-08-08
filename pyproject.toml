@@ -12,6 +12,7 @@ parsel = "^1.10.0"
 redis = "^6.3.0"
 python-dotenv = "^1.1.1"
 psycopg = {extras = ["binary", "pool"], version = "^3.2.9"}
+prometheus-client = "^0.22.1"
 
 
 [build-system]

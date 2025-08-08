@@ -1,15 +1,14 @@
-version: "3.9"
 
 services:
-  message_queue:
+  redis:
     image: redis:7
     ports:
       - "6379:6379"
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     env_file: .env
-    profiles: ["message_queue"]
+    profiles: ["backend"]
 
-  database:
+  postgres:
     image: postgres:16
     container_name: postgres_db
     restart: always
@@ -19,7 +18,7 @@ services:
     volumes:
       - ./init:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
-    profiles: ["database"]
+    profiles: ["backend"]
 
   scraper:
     build:
@@ -47,5 +46,69 @@ services:
     command: ["python", "scrapers/src/writer.py"]
     profiles: ["writer"]
 
+  streamlit:
+    build:
+      context: ./dashboard/
+    ports:
+      - "8501:8501"
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+    profiles: ["dashboard"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    env_file: .env
+    profiles: ["backend"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    env_file: .env
+    profiles: ["backend"]
+    depends_on:
+      - prometheus
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    profiles: ["backend"]
+    depends_on:
+      - postgres
+
+  redis_exporter:
+    image: oliver006/redis_exporter
+    ports:
+      - "9121:9121"
+    profiles: ["backend"]
+    depends_on:
+      - redis
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    ports:
+      - "9091:9091"
+    profiles: ["backend"]
+
+
+
 volumes:
+  prometheus_data:
+  grafana_data:
   postgres_data:
