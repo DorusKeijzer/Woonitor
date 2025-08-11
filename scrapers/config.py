@@ -1,7 +1,7 @@
 # --- CRAWLER --- #
 # Sleeping delay is picked uniformly between MIN and MAX:
-CRAWLER_THROTTLE_SPEED_MIN = 15 #seconds
-CRAWLER_THROTTLE_SPEED_MAX = 45 #seconds
+CRAWLER_THROTTLE_SPEED_MIN = 5 #seconds
+CRAWLER_THROTTLE_SPEED_MAX = 10 #seconds
 
 # --- SCRAPER --- #
 # Sleeping delay is picked uniformly between MIN and MAX:
