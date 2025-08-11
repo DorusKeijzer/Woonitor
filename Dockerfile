@@ -1,34 +1,34 @@
-# Use a full-featured Python base image for wider package availability.
 FROM python:3.12
-
-# Install system dependencies for Playwright, a virtual display server, and fonts.
-RUN apt-get update && apt-get install -y \
-    curl gnupg libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-    libxkbcommon0 libxcomposite1 libxrandr2 libgbm1 libpangocairo-1.0-0 \
-    libgtk-3-0 libasound2 libxdamage1 libxfixes3 libxshmfence1 libglu1-mesa libgl1-mesa-glx \
-    xvfb xauth \
-    fonts-liberation fonts-noto-color-emoji fonts-noto fonts-freefont-ttf \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
 RUN pip install poetry
 
-# Set the working directory for the application
+# Set working directory
 WORKDIR /app
 
-# Copy poetry files first for caching
+# Copy pyproject.toml and poetry.lock first (for better caching)
 COPY pyproject.toml poetry.lock ./
 
-# Install Python dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-root
+# Configure Poetry to not create a virtual environment (install directly to system)
+RUN poetry config virtualenvs.create false
 
-# Install Playwright browsers.
-RUN poetry run playwright install --with-deps
+# Install dependencies directly to the system Python
+RUN poetry install --no-root
 
-# Copy app source code
-COPY src/ ./src/
+# Install Playwright browsers
+RUN playwright install --with-deps
 
-# run  crawler script using xvfb-run.
+# Install system dependencies needed for Playwright
+RUN apt-get update && apt-get install -y \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxkbcommon0 \
+    libxcomposite1 libxrandr2 libgbm1 libpangocairo-1.0-0 libgtk-3-0 \
+    libasound2 libxdamage1 libxfixes3 libxshmfence1 libxshmfence1 \
+    xvfb xauth \
+    fonts-liberation fonts-noto-color-emoji fonts-noto fonts-freefont-ttf \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-CMD ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render & export DISPLAY=:99 && poetry run python src/crawler.py && sleep infinity"]
+# Copy the rest of your application code
+COPY . .
+
+# Simple command using system Python
+CMD ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/crawler.py"]

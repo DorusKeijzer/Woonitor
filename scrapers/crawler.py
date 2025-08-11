@@ -7,7 +7,7 @@ import uuid
 from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
-from prometheus_client import CollectionRegistry, Gauge, Counter, push_to_gateway
+from prometheus_client import CollectorRegistry, Gauge, Counter, push_to_gateway
 from random import random, choice
 from sys import exit
 from time import sleep
@@ -31,7 +31,7 @@ r = redis.Redis(
 # prometheus stuff
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 job_name = "Crawler"
-registry = CollectionRegistry()
+registry = CollectorRegistry()
 
 class Crawler:
     """Takes the name of an area and returns all available listings in the area"""
@@ -44,12 +44,17 @@ class Crawler:
         self.logger.info(f"Initialized crawler {self.name}.")
         # prometheus information
         self.new_pages_found = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
-        self.status_200 = Counter('status_200', 'Number of 200 responses', registry=registry)
-        self.status_403 = Counter('status_403', 'Number of 403 responses', registry=registry)
-        self.status_429 = Counter('status_429', 'Number of 429 responses', registry=registry)
+        self.status_codes = Counter(
+            'http_status_codes_total', 
+            'Count of HTTP status codes', 
+            ['code'], 
+            registry=registry
+        )
         self.captchas = Counter('captchas', 'Number of captchas served', registry=registry)
 
     def crawl_links(self):
+        self.status_codes.labels(code='303').inc(20)
+
         page_number = 1
         while True:
 
@@ -69,18 +74,18 @@ class Crawler:
 
             with sync_playwright() as p:
                 self.logger.info(f"Making request to {url} with user agent {ua} ...")
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=False)
                 context = browser.new_context(user_agent=ua)
                 page = context.new_page()
                 response = page.goto(url)            
                 if response:
                     self.logger.info(f"Response status: {response.status}")
                     if response.status == 200:
-                        self.status_200.inc(1)
+                        self.status_codes.labels(code='200').inc()
                     if response.status == 403:
-                        self.status_403.inc(1)
+                        self.status_codes.labels(code='403').inc()
                     if response.status == 429:
-                        self.status_429.inc(1)
+                        self.status_codes.labels(code='429').inc()
 
                     # if response.status in [403,429]:
                         # self.logger.info(f"Exiting because of encountering status code {response.status}")
@@ -94,7 +99,6 @@ class Crawler:
                 
                 title = selector.css("title::text").get()
                 self.logger.info(f"Page title: {title}")
-                print(type(title))
 
                 # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
                 # and a captcha if it suspect bot activity
@@ -124,7 +128,10 @@ class Crawler:
                     r.lpush("listing_queue", json.dumps(listing))
 
                 self.new_pages_found.inc(len(urls))
-                push_to_gateway(PUSHGATEWAY_URL, job=job_name, instance= self.name, registry=registry)
+                push_to_gateway(PUSHGATEWAY_URL, 
+                                job=job_name, 
+                                # instance= self.name, 
+                                registry=registry)
 
                 browser.close()
 
