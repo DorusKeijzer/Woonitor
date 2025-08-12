@@ -49,7 +49,6 @@ except psycopg.OperationalError as e:
 
 # prometheus stuff
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
-job_name = "Writer"
 registry = CollectorRegistry()
 
 class Writer:
@@ -134,6 +133,13 @@ class Writer:
             self.logger.error(f"Failed to write batch: {e}")
             self.writes.labels(code='failure').inc()
             self.conn.rollback()
+ 
+        push_to_gateway(PUSHGATEWAY_URL, 
+                        job=self.name, 
+                        # instance= self.name, 
+                        registry=registry)
+
+
 
 
     def reduce_to_int(self, string: str) -> int:

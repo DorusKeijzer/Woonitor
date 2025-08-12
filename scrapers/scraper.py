@@ -35,7 +35,6 @@ r = redis.Redis(
 
 # prometheus stuff
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
-job_name = "Scraper"
 registry = CollectorRegistry()
 
 class Scraper:
@@ -46,12 +45,12 @@ class Scraper:
         self.logger.info(f"Initialized scraper {self.name}.")
         self.pages_scraped = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
         self.status_codes = Counter(
-            'http_status_codes_total', 
+            'scraper_http_status_codes_total', 
             'Count of HTTP status codes', 
             ['code'], 
             registry=registry
         )
-        self.captchas = Counter('captchas', 'Number of captchas served', registry=registry)
+        self.captchas = Counter('scraper_captchas', 'Number of captchas served', registry=registry)
 
 
     def listen(self):
@@ -160,6 +159,12 @@ class Scraper:
             browser.close()
             self.pages_scraped.inc()
             r.lpush("data_queue", json.dumps(info))
+ 
+            push_to_gateway(PUSHGATEWAY_URL, 
+                            job=self.name, 
+                            # instance= self.name, 
+                            registry=registry)
+
 
             # sleep for a while
             sleeptime = random() * (SCRAPER_THROTTLE_SPEED_MAX - SCRAPER_THROTTLE_SPEED_MIN) + SCRAPER_THROTTLE_SPEED_MIN

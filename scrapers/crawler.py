@@ -46,7 +46,6 @@ dedup_push_script = r.register_script("""
 
 # prometheus stuff
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
-job_name = "Crawler"
 registry = CollectorRegistry()
 
 # postgres connection
@@ -77,12 +76,12 @@ class Crawler:
         # prometheus information
         self.new_pages_found = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
         self.status_codes = Counter(
-            'http_status_codes_total', 
+            'crawler_http_status_codes_total', 
             'Count of HTTP status codes', 
             ['code'], 
             registry=registry
         )
-        self.captchas = Counter('captchas', 'Number of captchas served', registry=registry)
+        self.captchas = Counter('cralwer_captchas', 'Number of captchas served', registry=registry)
 
     def crawl_links(self):
         self.status_codes.labels(code='303').inc(20)
@@ -174,7 +173,7 @@ class Crawler:
                         i += 1
                 
                 push_to_gateway(PUSHGATEWAY_URL, 
-                                job=job_name, 
+                                job=self.name, 
                                 # instance= self.name, 
                                 registry=registry)
 
