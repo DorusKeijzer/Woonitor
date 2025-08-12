@@ -9,6 +9,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from parsel import Selector
 from playwright.sync_api import sync_playwright
+from prometheus_client import CollectorRegistry, Gauge, Counter, push_to_gateway
 from random import random, choice
 from sys import exit
 from time import sleep
@@ -32,12 +33,26 @@ r = redis.Redis(
     password=os.getenv("REDIS_PASSWORD") or None
 )
 
+# prometheus stuff
+PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
+job_name = "Scraper"
+registry = CollectorRegistry()
+
 class Scraper:
     """Listens to the redis queue and scrapes information of every listing it receives"""
     def __init__(self):
         self.name= f"Scraper-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
+        self.new_pages_found = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
+        self.status_codes = Counter(
+            'http_status_codes_total', 
+            'Count of HTTP status codes', 
+            ['code'], 
+            registry=registry
+        )
+        self.captchas = Counter('captchas', 'Number of captchas served', registry=registry)
+
 
     def listen(self):
         """Listens to the redis message queue and scrapes the listings it receives"""
@@ -79,10 +94,19 @@ class Scraper:
             response = page.goto(url)            
             if response:
                 self.logger.info(f"Response status: {response.status}")
+                if response:
+                    self.logger.info(f"Response status: {response.status}")
+                    if response.status == 200:
+                        self.status_codes.labels(code='200').inc()
+                    if response.status == 403:
+                        self.status_codes.labels(code='403').inc()
+                    if response.status == 429:
+                        self.status_codes.labels(code='429').inc()
 
-                if response.status in [403,429]:
-                    self.logger.info(f"Exiting because of encountering status code {response.status}")
-                    exit(1)
+
+                # if response.status in [403,429]:
+                #     self.logger.info(f"Exiting because of encountering status code {response.status}")
+                #     exit(1)
 
             else:
                 self.logger.info(f"Response is empty")
@@ -99,8 +123,10 @@ class Scraper:
             # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
             # and a captcha if it suspect bot activity
             if title and "Je bent bijna op de pagina die" in title:
-                self.logger.info("Exiting because served captcha page")
-                exit(1)
+                self.logger.info("Encountered Captcha page")
+                self.captchas.inc(1)
+                # self.logger.info("Exiting because served captcha page")
+                # exit(1)
             
             # --- about box --- #
             # Contains: address, postal code, neighborhood

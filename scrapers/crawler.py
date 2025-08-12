@@ -103,6 +103,7 @@ class Crawler:
                 # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
                 # and a captcha if it suspect bot activity
                 if title and "Je bent bijna op de pagina die" in title:
+                    self.logger.info("Encountered Captcha page")
                     self.captchas.inc(1)
 
                     # self.logger.info("Exiting because served captcha page")
