@@ -23,7 +23,7 @@ services:
   scraper:
     build:
       context: .
-      dockerfile: Dockerfile.scraper
+      dockerfile: scraper.dockerfile
     env_file: .env
     # The new, working command for the scraper service
     command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && /app/.venv/bin/python scrapers/scraper.py"]
@@ -33,7 +33,7 @@ services:
   crawler:
       build:
         context: .
-        dockerfile: Dockerfile.scraper
+        dockerfile: scraper.dockerfile
       env_file: .env
       command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/crawler.py"]
       profiles: ["crawler"]
@@ -41,7 +41,7 @@ services:
   writer:
     build:
       context: .
-      dockerfile: Dockerfile.writer
+      dockerfile: writer.dockerfile
     env_file: .env
     command: ["python", "scrapers/writer.py"]
     profiles: ["writer"]
