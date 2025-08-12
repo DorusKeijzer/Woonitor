@@ -43,7 +43,7 @@ class Scraper:
         self.name= f"Scraper-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
-        self.pages_scraped = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
+        self.pages_scraped = Counter('scraper_pages_scraped', 'Number of pages scraped', registry=registry)
         self.status_codes = Counter(
             'scraper_http_status_codes_total', 
             'Count of HTTP status codes', 

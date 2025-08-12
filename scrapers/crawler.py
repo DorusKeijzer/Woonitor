@@ -74,14 +74,14 @@ class Crawler:
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized crawler {self.name}.")
         # prometheus information
-        self.new_pages_found = Counter('new_pages_found_total', 'Number of new pages found', registry=registry)
+        self.new_pages_found = Counter('crawler_new_pages_found_total', 'Number of new pages found', registry=registry)
         self.status_codes = Counter(
             'crawler_http_status_codes_total', 
             'Count of HTTP status codes', 
             ['code'], 
             registry=registry
         )
-        self.captchas = Counter('cralwer_captchas', 'Number of captchas served', registry=registry)
+        self.captchas = Counter('crawler_captchas', 'Number of captchas served', registry=registry)
 
     def crawl_links(self):
         self.status_codes.labels(code='303').inc(20)
@@ -189,7 +189,7 @@ class Crawler:
             sleep(sleeptime)
 
 if __name__ == "__main__":
-    crawler = Crawler("Gemeente Utrecht")
+    crawler = Crawler("Gemeente Tilburg")
     crawler.crawl_links()
 
     

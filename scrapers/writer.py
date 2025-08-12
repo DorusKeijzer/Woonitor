@@ -140,8 +140,6 @@ class Writer:
                         registry=registry)
 
 
-
-
     def reduce_to_int(self, string: str) -> int:
         """Reduce a string to just the numbers in the string and store as integer."""
         return int("".join([element for element in string if element in "0123456789"]))
