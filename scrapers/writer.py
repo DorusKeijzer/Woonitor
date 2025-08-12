@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 from psycopg import sql
 from psycopg.types.json import Json
+from prometheus_client import CollectorRegistry, Gauge, Counter, push_to_gateway
 from time import time
 from typing import Dict, Tuple, Optional, Any
 
@@ -46,12 +47,18 @@ except psycopg.OperationalError as e:
     print("connection failed")
     raise e 
 
+# prometheus stuff
+PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
+job_name = "Writer"
+registry = CollectorRegistry()
+
 class Writer:
     def __init__(self):
         self.name= f"Writer-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized writer {self.name}.")
         self.conn = conn
+        self.writes = Counter('writer_writes', 'Number of succesful writes by writers', ["writes"], registry=registry)
 
     def listen(self):
         batch = []
@@ -122,8 +129,10 @@ class Writer:
                 cur.executemany(insert_query, values)
             self.conn.commit()
             self.logger.info(f"Wrote batch of {len(listings)} listings to database")
+            self.writes.labels(code='success').inc()
         except Exception as e:
             self.logger.error(f"Failed to write batch: {e}")
+            self.writes.labels(code='failure').inc()
             self.conn.rollback()
 
 
