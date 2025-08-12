@@ -26,7 +26,8 @@ services:
       dockerfile: scraper.dockerfile
     env_file: .env
     # The new, working command for the scraper service
-    command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && /app/.venv/bin/python scrapers/scraper.py"]
+    # command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && /app/.venv/bin/python scrapers/scraper.py"]
+    command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/scraper.py"]
     # command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/scraper.py"]
     profiles: ["scraper"]
 
@@ -45,17 +46,6 @@ services:
     env_file: .env
     command: ["python", "scrapers/writer.py"]
     profiles: ["writer"]
-
-  streamlit:
-    build:
-      context: ./dashboard/
-    ports:
-      - "8501:8501"
-    env_file: .env
-    depends_on:
-      - postgres
-      - redis
-    profiles: ["dashboard"]
 
   prometheus:
     image: prom/prometheus:latest
@@ -106,7 +96,16 @@ services:
       - "9091:9091"
     profiles: ["backend"]
 
-
+  streamlit:
+    build:
+      context: .
+      dockerfile: frontend.dockerfile
+    ports:
+      - "8501:8501"
+    env_file: .env
+    depends_on:
+      - postgres_db
+    profiles: ["dashboard"]
 
 volumes:
   prometheus_data:

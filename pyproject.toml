@@ -7,14 +7,21 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-playwright = "^1.54.0"
-parsel = "^1.10.0"
+
+# Common deps used by most services
 redis = "^6.3.0"
 python-dotenv = "^1.1.1"
 psycopg = {extras = ["binary", "pool"], version = "^3.2.9"}
+
+# Default group is kept minimal so `poetry install` without flags doesn't pull everything
+
+[tool.poetry.group.scraper.dependencies]
+playwright = "^1.54.0"
+parsel = "^1.10.0"
 prometheus-client = "^0.22.1"
 
+[tool.poetry.group.writer.dependencies]
+prometheus-client = "^0.22.1"
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.poetry.group.dashboard.dependencies]
+streamlit = "^1.37.0"

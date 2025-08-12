@@ -17,12 +17,15 @@ COPY pyproject.toml poetry.lock ./
 # Configure Poetry to install to system
 RUN poetry config virtualenvs.create false
 
-# Install only writer deps
-RUN poetry install --with writer --no-root --no-interaction --no-ansi
+# Install only dashboard deps
+RUN poetry install --only default,dashboard --no-root --no-interaction --no-ansi
 
-# Copy application code
-COPY . .
+# Copy the Streamlit app code
+COPY dashboard/ .
 
-# Default command
-CMD ["python", "scrapers/writer.py"]
+# Expose Streamlit port
+EXPOSE 8501
+
+# Run Streamlit app
+CMD ["poetry", "run", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 
