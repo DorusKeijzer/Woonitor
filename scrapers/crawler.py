@@ -84,8 +84,6 @@ class Crawler:
         self.captchas = Counter('crawler_captchas', 'Number of captchas served', registry=registry)
 
     def crawl_links(self):
-        self.status_codes.labels(code='303').inc(20)
-
         page_number = 1
         while True:
 
@@ -188,8 +186,16 @@ class Crawler:
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
 
+            if page_number > 64:
+                self.logger.info(f"Quitting because page number is {page_number}")
+                quit(0)
+
+
+
+
+
 if __name__ == "__main__":
-    crawler = Crawler("Gemeente Tilburg")
+    crawler = Crawler("Tilburg")
     crawler.crawl_links()
 
     

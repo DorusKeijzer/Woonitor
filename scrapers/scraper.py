@@ -93,14 +93,12 @@ class Scraper:
             response = page.goto(url)            
             if response:
                 self.logger.info(f"Response status: {response.status}")
-                if response:
-                    self.logger.info(f"Response status: {response.status}")
-                    if response.status == 200:
-                        self.status_codes.labels(code='200').inc()
-                    if response.status == 403:
-                        self.status_codes.labels(code='403').inc()
-                    if response.status == 429:
-                        self.status_codes.labels(code='429').inc()
+                if response.status == 200:
+                    self.status_codes.labels(code='200').inc()
+                if response.status == 403:
+                    self.status_codes.labels(code='403').inc()
+                if response.status == 429:
+                    self.status_codes.labels(code='429').inc()
 
 
                 # if response.status in [403,429]:
@@ -160,11 +158,15 @@ class Scraper:
             self.pages_scraped.inc()
             r.lpush("data_queue", json.dumps(info))
  
-            push_to_gateway(PUSHGATEWAY_URL, 
-                            job=self.name, 
-                            # instance= self.name, 
-                            registry=registry)
+            try: 
+                push_to_gateway(PUSHGATEWAY_URL, 
 
+                                job=self.name, 
+                                # instance= self.name, 
+                                registry=registry)
+
+            except Exception as e:
+                self.logger.info(f"failed to push metrics {e}")
 
             # sleep for a while
             sleeptime = random() * (SCRAPER_THROTTLE_SPEED_MAX - SCRAPER_THROTTLE_SPEED_MIN) + SCRAPER_THROTTLE_SPEED_MIN
