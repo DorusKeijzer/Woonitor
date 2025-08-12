@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import psycopg
 import redis
 import uuid
 
@@ -28,10 +29,41 @@ r = redis.Redis(
     password=os.getenv("REDIS_PASSWORD") or None
 )
 
+dedup_push_script = r.register_script("""
+    local set_key = KEYS[1]
+    local list_key = KEYS[2]
+    local url = ARGV[1]
+    local payload = ARGV[2]
+
+    if redis.call("SISMEMBER", set_key, url) == 0 then
+        redis.call("SADD", set_key, url)
+        redis.call("LPUSH", list_key, payload)
+        return 1
+    else
+        return 0
+    end
+""")
+
 # prometheus stuff
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 job_name = "Crawler"
 registry = CollectorRegistry()
+
+# postgres connection
+print("Connecting to postgres")
+try: 
+    conn = psycopg.connect(f"host={os.getenv("POSTGRES_HOST")} \
+                    connect_timeout=10 \
+                    dbname={os.getenv("POSTGRES_DB")}\
+                    user={os.getenv("POSTGRES_USER")}\
+                    password={os.getenv("POSTGRES_PASSWORD")}")
+    print("connection: ", conn)
+except psycopg.OperationalError as e:
+    print("connection failed")
+    raise e 
+
+cur = conn.cursor()
+
 
 class Crawler:
     """Takes the name of an area and returns all available listings in the area"""
@@ -121,14 +153,21 @@ class Crawler:
                 self.logger.info(f"Found {len(urls)} urls.")
 
                 for url in urls:
+                    cur.execute("SELECT 1 FROM listings WHERE url = %s LIMIT 1;", (urls))
+                    if cur.fetchone():
+                        continue
+                    
                     listing = {
                         "sender": self.name,
                         "url": url,
-                        "area":  self.cleaned_area
+                        "area": self.cleaned_area
                     }
-                    r.lpush("listing_queue", json.dumps(listing))
-
-                self.new_pages_found.inc(len(urls))
+                    dedup_push_script(
+                        keys=["listing_seen", "listing_queue"],
+                        args=[url, json.dumps(listing)]
+                    )
+                    self.new_pages_found.inc(len(urls))
+                
                 push_to_gateway(PUSHGATEWAY_URL, 
                                 job=job_name, 
                                 # instance= self.name, 
