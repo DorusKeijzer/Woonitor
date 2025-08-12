@@ -150,10 +150,11 @@ class Crawler:
                 urls = list(set([url for url in urls if url.startswith("/detail/")]))
                 self.logger.info(urls)
 
-                self.logger.info(f"Found {len(urls)} urls.")
 
+                i = 0 
                 for url in urls:
-                    cur.execute("SELECT 1 FROM listings WHERE url = %s LIMIT 1;", (urls))
+                    # filter if url already in postgres
+                    cur.execute("SELECT 1 FROM listings WHERE url = %s LIMIT 1;", (urls,))
                     if cur.fetchone():
                         continue
                     
@@ -162,17 +163,24 @@ class Crawler:
                         "url": url,
                         "area": self.cleaned_area
                     }
-                    dedup_push_script(
+                    pushed = dedup_push_script(
                         keys=["listing_seen", "listing_queue"],
                         args=[url, json.dumps(listing)]
                     )
-                    self.new_pages_found.inc(len(urls))
+
+                    # only push if no duplicate in redis or postgres
+                    if pushed == 1:
+                        self.new_pages_found.inc()
+                        i += 1
                 
                 push_to_gateway(PUSHGATEWAY_URL, 
                                 job=job_name, 
                                 # instance= self.name, 
                                 registry=registry)
 
+
+                self.logger.info(f"Succesfully pushed {i} urls.")
+                
                 browser.close()
 
             page_number += 1
@@ -180,10 +188,6 @@ class Crawler:
 
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
-
-            if page_number == 5:
-                break
-
 
 if __name__ == "__main__":
     crawler = Crawler("Gemeente Utrecht")
