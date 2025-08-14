@@ -18,7 +18,7 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false
 
 # Install only dashboard deps
-RUN poetry install --only default,dashboard --no-root --no-interaction --no-ansi
+RUN poetry install --with dashboard --no-root --no-interaction --no-ansi
 
 # Copy the Streamlit app code
 COPY dashboard/ .

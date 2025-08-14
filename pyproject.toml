@@ -25,3 +25,4 @@ prometheus-client = "^0.22.1"
 
 [tool.poetry.group.dashboard.dependencies]
 streamlit = "^1.37.0"
+plotly = "^6.3.0"
