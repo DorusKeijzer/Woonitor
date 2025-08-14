@@ -69,8 +69,12 @@ class Crawler:
     def __init__(self, area: str):
         self.area = area
         self.cleaned_area = area.lower().replace(" ", "-")
-        self.base_url = f"https://www.funda.nl/zoeken/koop/?selected_area=[\"{self.cleaned_area}\"]&availability=[\"unavailable\"]&search_result="
-        self.name= f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
+        self.base_url = 'https://www.funda.nl/zoeken/koop?selected_area=["tilburg","amsterdam","rotterdam","den-haag","utrecht","eindhoven","groningen"]&availability=["unavailable"]&search_result='
+
+
+        # self.base_url = f"https://www.funda.nl/zoeken/koop/?selected_area=[\"{self.cleaned_area}\"]&availability=[\"unavailable\"]&search_result="
+        # self.name= f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
+        self.name= f"Crawler-All-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized crawler {self.name}.")
         # prometheus information
@@ -82,6 +86,7 @@ class Crawler:
             registry=registry
         )
         self.captchas = Counter('crawler_captchas', 'Number of captchas served', registry=registry)
+        self.storing = Counter('crawler_storing', 'Number of storingen served', registry=registry)
 
     def crawl_links(self):
         page_number = 1
@@ -134,6 +139,9 @@ class Crawler:
                 if title and "Je bent bijna op de pagina die" in title:
                     self.logger.info("Encountered Captcha page")
                     self.captchas.inc(1)
+                if title and "Storing" in title:
+                    self.logger.info("Encountered storing page")
+                    self.storing.inc(1)
 
                     # self.logger.info("Exiting because served captcha page")
                     # exit(1)
@@ -186,7 +194,7 @@ class Crawler:
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
 
-            if page_number > 64:
+            if page_number > 166:
                 self.logger.info(f"Quitting because page number is {page_number}")
                 quit(0)
 

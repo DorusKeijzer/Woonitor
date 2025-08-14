@@ -24,7 +24,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry install --with scraper --no-root --no-interaction --no-ansi
 
 # Install Playwright browsers
-RUN playwright install --with-deps
+RUN playwright install 
 
 # Copy application code
 COPY . .

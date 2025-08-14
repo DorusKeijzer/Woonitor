@@ -18,7 +18,7 @@ services:
     volumes:
       - ./init:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
-    profiles: ["backend"]
+    profiles: ["backend", "dashboard"]
 
   scraper:
     build:
@@ -104,7 +104,7 @@ services:
       - "8501:8501"
     env_file: .env
     depends_on:
-      - postgres_db
+      - postgres
     profiles: ["dashboard"]
 
 volumes:
