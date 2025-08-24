@@ -31,4 +31,11 @@ geopandas = "^1.1.1"
 [tool.poetry.group.ml.dependencies]
 scikit-learn = "^1.7.1"
 fastapi = "^0.116.1"
+pandas = "^2.3.2"
+matplotlib = "^3.10.5"
+seaborn = "^0.13.2"
+xgboost = "^3.0.4"
+catboost = "^1.2.8"
+lightgbm = "^4.6.0"
+optuna = "^4.5.0"
 

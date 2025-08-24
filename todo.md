@@ -1,4 +1,6 @@
 DE
+0. clean up dockerfiles
+
 
 1. scrape all data
   funda restricts queries to 9990 results. Need to reinstate crawler class to accept queries some other way (perhaps deeplink) as to be able to have both small and big queries)

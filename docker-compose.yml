@@ -107,6 +107,13 @@ services:
       - postgres
     profiles: ["dashboard"]
 
+  ml_services:
+    build:
+      context: .
+      dockerfile: ml.dockerfile
+    env_file: .env
+    profiles: ["ml"]
+
 volumes:
   prometheus_data:
   grafana_data:
