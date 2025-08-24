@@ -75,55 +75,75 @@ def detrend(dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe
 
 
-from sklearn.cluster import KMeans
-
-def transform(dataframe: pd.DataFrame):
+def transform_train(df: pd.DataFrame):
     # Clean listing type
-    dataframe['listing_type_clean'] = dataframe['listing_type'].str.split(r'[\(,]').str[0].str.strip()
+    df['listing_type_clean'] = df['listing_type'].str.split(r'[\(,]').str[0].str.strip()
     
-    # Keep relevant columns including neighborhood
-    dataframe = dataframe[['surface_area',
-                           'listing_type_clean',
-                           'bedrooms', 
-                           'total_rooms',
-                           'city', 
-                           'energy_label', 
-                           'neighborhood',
-                           'detrended_price']]
-
     # Fill numeric columns with median
     for col in ['surface_area', 'bedrooms', 'total_rooms', 'detrended_price']:
-        dataframe[col] = dataframe[col].fillna(dataframe[col].median())
-
-    # Fill categorical columns with 'Unknown'
+        df[col] = df[col].fillna(df[col].median())
+    
+    # Fill categorical columns
     for col in ['listing_type_clean', 'city', 'energy_label', 'neighborhood']:
-        dataframe[col] = dataframe[col].fillna('Unknown')
+        df[col] = df[col].fillna('Unknown')
 
     # Interaction features
-    dataframe['bedrooms_per_room'] = dataframe['bedrooms'] / dataframe['total_rooms']
-    dataframe['area_per_room'] = dataframe['surface_area'] / dataframe['total_rooms']
-    dataframe['bedrooms_area_interaction'] = dataframe['bedrooms'] * dataframe['surface_area']
-    dataframe['area_times_bedrooms'] = dataframe['surface_area'] * dataframe['bedrooms']
+    df['bedrooms_per_room'] = df['bedrooms'] / df['total_rooms']
+    df['area_per_room'] = df['surface_area'] / df['total_rooms']
+    df['bedrooms_area_interaction'] = df['bedrooms'] * df['surface_area']
+    df['area_times_bedrooms'] = df['surface_area'] * df['bedrooms']
 
-    # Clip outliers in detrended price (1st and 99th percentile)
-    lower = dataframe['detrended_price'].quantile(0.01)
-    upper = dataframe['detrended_price'].quantile(0.99)
-    dataframe['detrended_price'] = dataframe['detrended_price'].clip(lower, upper)
+    # Clip outliers
+    lower = df['detrended_price'].quantile(0.01)
+    upper = df['detrended_price'].quantile(0.99)
+    df['detrended_price'] = df['detrended_price'].clip(lower, upper)
 
-    # Neighborhood clustering
-    neighborhood_medians = dataframe.groupby('neighborhood')['detrended_price'].median().reset_index()
+    # --- Target encoding for neighborhood (train only) ---
+    neighborhood_means = df.groupby('neighborhood')['detrended_price'].mean()
+    df['neighborhood_te'] = df['neighborhood'].map(neighborhood_means)
+
+    # --- Optional: clustering on target-encoded neighborhood ---
     kmeans = KMeans(n_clusters=15, random_state=42)
-    neighborhood_medians['cluster'] = kmeans.fit_predict(neighborhood_medians[['detrended_price']])
-    cluster_map = neighborhood_medians.set_index('neighborhood')['cluster']
-    dataframe['neighborhood_cluster'] = dataframe['neighborhood'].map(cluster_map)
+    df['neighborhood_cluster'] = kmeans.fit_predict(df[['neighborhood_te']])
 
-    # One-hot encode categorical variables (including neighborhood cluster)
-    dataframe = pd.get_dummies(dataframe, 
-                               columns=['listing_type_clean', 'city', 'energy_label', 'neighborhood_cluster'], 
-                               drop_first=True)
+    # One-hot encode categorical vars
+    df = pd.get_dummies(df, 
+                        columns=['listing_type_clean', 'city', 'energy_label', 'neighborhood_cluster'], 
+                        drop_first=True)
+    df = df.drop(columns=['neighborhood', 'listing_type'])
 
-    # Drop original neighborhood column
-    dataframe = dataframe.drop(columns=['neighborhood'])
+
+    return df, neighborhood_means, kmeans
+
+def transform_test(df: pd.DataFrame, neighborhood_means, kmeans):
+    df['listing_type_clean'] = df['listing_type'].str.split(r'[\(,]').str[0].str.strip()
+    
+    for col in ['surface_area', 'bedrooms', 'total_rooms', 'detrended_price']:
+        df[col] = df[col].fillna(df[col].median())
+    for col in ['listing_type_clean', 'city', 'energy_label', 'neighborhood']:
+        df[col] = df[col].fillna('Unknown')
+
+    df['bedrooms_per_room'] = df['bedrooms'] / df['total_rooms']
+    df['area_per_room'] = df['surface_area'] / df['total_rooms']
+    df['bedrooms_area_interaction'] = df['bedrooms'] * df['surface_area']
+    df['area_times_bedrooms'] = df['surface_area'] * df['bedrooms']
+
+    lower = df['detrended_price'].quantile(0.01)
+    upper = df['detrended_price'].quantile(0.99)
+    df['detrended_price'] = df['detrended_price'].clip(lower, upper)
+
+    # Use training target encoding
+    df['neighborhood_te'] = df['neighborhood'].map(neighborhood_means).fillna(df['neighborhood'].map(neighborhood_means).mean())
+
+    # Apply clustering from training
+    df['neighborhood_cluster'] = kmeans.predict(df[['neighborhood_te']])
+
+    df = pd.get_dummies(df, 
+                        columns=['listing_type_clean', 'city', 'energy_label', 'neighborhood_cluster'], 
+                        drop_first=True)
+    df = df.drop(columns=['neighborhood','listing_type'])
+    
+    return df
 
     return dataframe
 def visualize(df: pd.DataFrame):
@@ -159,16 +179,32 @@ if __name__ == "__main__":
     listings = get_listings()
     listings = detrend(listings)
     mean_val = listings['trend_price'].sample(n=1, random_state=42).iloc[0]
-    listings = transform(listings)
     print("MEAN VAL:",mean_val)
+    print("detrend price:", listings['detrended_price'])
 
-    X = listings.drop(columns=['detrended_price'])
     y = listings['detrended_price'] 
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(listings, y, test_size=0.2, random_state=42)
+
+    X_train, neighborhood_means, kmeans  = transform_train(X_train)
+    X_test = transform_test(X_test, neighborhood_means, kmeans)
+    
+    X_train = X_train.drop(columns=['detrended_price','trend_price','last_asking_price', 'sell_date'])
+    X_test = X_test.drop(columns=['detrended_price', 'trend_price', 'last_asking_price'])
+
+    # ensure train and test have the same columns
+    X_train, X_test = X_train.align(X_test, join='left', axis=1, fill_value=0)
+
+    dummy_point = X_test.iloc[0:1]
+    print(dummy_point.T)
+    dummy_point = X_train.iloc[0:1]
+
+
+    print(dummy_point.T)
+
 
     # Define quantiles you want to predict
-    quantiles = np.linspace(0.05,0.95,50)
+    quantiles = np.linspace(0.05,0.95,24)
     models = {}
 
     results = {}
@@ -188,34 +224,43 @@ if __name__ == "__main__":
         print(f"Quantile {q}: MAE={metrics['MAE']:.2f}, RMSE={metrics['RMSE']:.2f}, R2={metrics['R2']:.4f}")
 
     # Visualization for a dummy data point
-    dummy_point = X_test.iloc[0:1]
+    for i in range(1,10):
+        dummy_point = X_test.iloc[i-1:i]
 
+        print(i, dummy_point.T)
 
-    predicted_prices = [models[q].predict(dummy_point)[0] + mean_val for q in quantiles]
+        predicted_prices = [models[q].predict(dummy_point)[0] + mean_val for q in quantiles]
 
-# Generate samples by interpolating between quantiles
-    n_samples = 10000
-    uniform_samples = np.random.rand(n_samples)
-    samples = np.interp(uniform_samples, quantiles, predicted_prices)
+        # Generate samples by interpolating between quantiles
 
-# Fit KDE
-    kde = gaussian_kde(samples)
+        n_samples = 10000
+        uniform_samples = np.random.rand(n_samples)
+        samples = np.interp(uniform_samples, quantiles, predicted_prices)
 
-# Define plotting range
-    x = np.linspace(min(predicted_prices)*0.95, max(predicted_prices)*1.05, 1000)
-    pdf = kde(x)
+        # Fit KDE
+        kde = gaussian_kde(samples)
 
-# Compute 25th and 75th percentile for shading
-    p25 = np.percentile(samples, 25)
-    p75 = np.percentile(samples, 75)
+        # Define plotting range
+        x = np.linspace(min(predicted_prices)*0.95, max(predicted_prices)*1.05, 1000)
+        pdf = kde(x)
 
-# Plot PDF
-    plt.figure(figsize=(8,5))
-    plt.plot(x, pdf, label='Estimated PDF', color='blue')
-    plt.fill_between(x, pdf, where=(x >= p25) & (x <= p75), color='orange', alpha=0.3, label='25%-75% range')
-    plt.xlabel('Predicted Price')
-    plt.ylabel('Density')
-    plt.title('Smoothed PDF with Interquartile Range')
-    plt.grid(True)
-    plt.legend()
-    plt.show()
+        # Compute 25th and 75th percentile for shading
+        p25 = np.percentile(samples, 25)
+        p75 = np.percentile(samples, 75)
+
+        p10 = np.percentile(samples, 10)
+        p90 = np.percentile(samples, 90)
+        mass_25_75 = kde.integrate_box_1d(p25, p75)
+        print(f"Mass between p25 and p75 under KDE: {mass_25_75:.3f}")
+
+        # Plot PDF
+        plt.figure(figsize=(8,5))
+        plt.plot(x, pdf, label='Verwachte prijsverdeling', color='blue')
+        plt.fill_between(x, pdf, where=(x >= p25) & (x <= p75), color='orange', alpha=0.3, label='Realistische prijsklasse (25%-75%)')
+        plt.fill_between(x, pdf, where=(x >= p10) & (x <= p90), color='orange', alpha=0.3, label='10%-90%')
+        plt.xlabel('Voorspelde prijs')
+        plt.ylabel('Dichtheid')
+        plt.title('Verwachte prijsverdeling')
+        plt.grid(True)
+        plt.legend()
+        plt.show()
