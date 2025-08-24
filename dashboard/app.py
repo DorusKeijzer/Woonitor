@@ -4,7 +4,10 @@ import pandas as pd
 from dotenv import load_dotenv
 import os
 import plotly.express as px
+import json
+import pathlib
 
+import geopandas as gpd
 load_dotenv()
 
 @st.cache_data(ttl=600)
@@ -37,6 +40,7 @@ def get_listings():
           AND city IS NOT NULL
           AND energy_label IS NOT NULL
           AND city IN ('Amsterdam', 'Rotterdam', 'Den', 'Groningen', 'Tilburg', 'Eindhoven', 'Utrecht')
+          AND sell_date > '2025-02-01'
         LIMIT 100000;
     """
     df = pd.read_sql(query, conn)
@@ -63,44 +67,138 @@ if city_selected != "Alle":
 else:
     df_filtered = df
 
-st.title("Woonitor")
+if city_selected != "Alle":
+    st.title(f"Woonitor {city_selected}")
+else:
+    st.title(f"Woonitor")
+
+if city_selected != "Alle":
+    # Filter city data
+    df_city = df[df["city"] == city_selected].copy()
+    theme_primary_color = st.context.theme.type
+    theme_base = st.get_option("theme.base")  # "light" or "dark"
+    print("USER THEME: ", theme_base)
+
+    map_style = "carto-darkmatter" if theme_base == "dark" else "carto-positron"
+
+    # Path to geojsons
+    geojson_dir = pathlib.Path(__file__).parent / "geojsons"
+    print(geojson_dir)
+    geojson_map = {
+        "Amsterdam": geojson_dir / "Amsterdam.geojson",
+        "Rotterdam": geojson_dir / "Rotterdam.geojson",
+        # "Den": geojson_dir / "Den_Haag.geojson",  # adjust if 'Den' isn't Den Haag
+        "Groningen": geojson_dir / "Groningen.geojson",
+        "Tilburg": geojson_dir / "Tilburg.geojson",
+        "Eindhoven": geojson_dir / "Eindhoven.geojson",
+        "Utrecht": geojson_dir / "Utrecht.geojson"
+    }
+
+    if city_selected in geojson_map and geojson_map[city_selected].exists():
+        print(f"Drawing map for {city_selected}")
+        # Load geojson
+        gdf = gpd.read_file(geojson_map[city_selected]).to_crs(epsg=4326)
+        geojson_data = json.loads(gdf.to_json())
+
+        print(geojson_data["features"][0]["properties"]["buurtnaam"])
+
+        # Normalize names in dataframe
+        df_city["neighborhood_norm"] = df_city["neighborhood"].str.strip().str.lower()
+
+        # Aggregate median price per neighborhood
+        df_price = (
+            df_city.groupby("neighborhood_norm", as_index=False)
+            .agg(last_asking_price=("last_asking_price", "median"),
+                    num_houses=("last_asking_price", "count"))
+        )
+
+        print(df_price)
+
+        # Normalize names in geojson
+        for feat in geojson_data["features"]:
+            feat["properties"]["buurtnaam_norm"] = feat["properties"]["buurtnaam"].strip().lower()
+            # print(feat["properties"]["buurtnaam_norm"])
+
+        # Center map dynamically using geopandas
+        centroid = gdf.geometry.centroid.unary_union.centroid
+        center_coords = {"lat": centroid.y, "lon": centroid.x}
+
+        df_neighs = set(df_price["neighborhood_norm"])
+        geojson_neighs = {feat["properties"]["buurtnaam_norm"] for feat in geojson_data["features"]}
+
+# Intersection
+        matching_neighs = df_neighs & geojson_neighs
+
+# Non-matching on both sides
+        non_matching_df = df_neighs - geojson_neighs      # In DataFrame but not in GeoJSON
+        non_matching_geojson = geojson_neighs - df_neighs # In GeoJSON but not in DataFrame
+
+        print("Matching neighborhoods:", matching_neighs)
+        print("In DataFrame only:", non_matching_df)
+        print("In GeoJSON only:", non_matching_geojson)
+
+        if matching_neighs:
+            fig = px.choropleth_map(
+                df_price,
+                geojson=geojson_data,
+                locations="neighborhood_norm",
+                featureidkey="properties.buurtnaam_norm",
+                color="last_asking_price",
+                color_continuous_scale="Viridis",
+                map_style="carto-darkmatter",
+                zoom=10,
+                center=center_coords,
+                opacity=0.6,
+                labels={"last_asking_price": "Mediaan laatste vraagprijs (€)", 
+                        "num_houses": "Aantal woningen"},
+                hover_data={
+                    "last_asking_price": ":,.0f",  # nicely formatted median price
+                    "num_houses": True             # show the number of listings
+                }
+            )
+
+            st.subheader(f"Mediaan laatste vraagprijs per buurt - {city_selected}")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning(f"Geen overeenkomende buurten gevonden voor {city_selected}.")
+
 
 # 1. Price trends over time
 if city_selected == "Alle":
-    price_trends = df.groupby(['sell_month', 'city'])['last_asking_price'].mean().reset_index()
+    price_trends = df.groupby(['sell_month', 'city'])['last_asking_price'].median().reset_index()
     fig1 = px.line(price_trends, x='sell_month', y='last_asking_price', color='city',
-                   title='Gemiddelde Vraagprijs door de Tijd')
+                   title='Mediaan laatste vraagprijs over tijd')
 else:
-    price_trends = df_filtered.groupby('sell_month')['last_asking_price'].mean().reset_index()
+    price_trends = df_filtered.groupby('sell_month')['last_asking_price'].median().reset_index()
     fig1 = px.line(price_trends, x='sell_month', y='last_asking_price',
-                   title='Gemiddelde Vraagprijs over tijd')
+                   title='Mediaan laatste vraagprijs over tijd')
 
 fig1.update_yaxes(range=[0, price_trends['last_asking_price'].max() * 1.1])
-fig1.update_layout(xaxis_title="Verkoopmaand", yaxis_title="Gemiddelde Vraagprijs (€)")
+fig1.update_layout(xaxis_title="Verkoopmaand", yaxis_title="Mediaan Vraagprijs (€)")
 st.plotly_chart(fig1, use_container_width=True)
 
 # sell time over time
 if city_selected == "Alle":
-    sell_duration_trends = df.groupby(['sell_month', 'city'])['sell_duration_days'].mean().reset_index()
+    sell_duration_trends = df.groupby(['sell_month', 'city'])['sell_duration_days'].median().reset_index()
     fig_sell_duration = px.line(sell_duration_trends, x='sell_month', y='sell_duration_days', color='city',
-                               title='Gemiddelde Verkooptijd over tijd (Dagen)')
+                               title='Mediaan Verkooptijd over tijd (Dagen)')
 else:
-    sell_duration_trends = df_filtered.groupby('sell_month')['sell_duration_days'].mean().reset_index()
+    sell_duration_trends = df_filtered.groupby('sell_month')['sell_duration_days'].median().reset_index()
     fig_sell_duration = px.line(sell_duration_trends, x='sell_month', y='sell_duration_days',
-                               title='Gemiddelde Verkooptijd over tijd (Dagen)')
+                               title='Mediaan Verkooptijd over tijd (Dagen)')
 
 fig_sell_duration.update_yaxes(range=[0, sell_duration_trends['sell_duration_days'].max() * 1.1])
-fig_sell_duration.update_layout(xaxis_title="Verkoopmaand", yaxis_title="Gemiddelde Verkooptijd (Dagen)")
+fig_sell_duration.update_layout(xaxis_title="Verkoopmaand", yaxis_title="Mediaan Verkooptijd (Dagen)")
 st.plotly_chart(fig_sell_duration, use_container_width=True)
 
 
 # 2. Average price per city
-city_prices = df.groupby('city')['last_asking_price'].mean().sort_values(ascending=False).reset_index()
+city_prices = df.groupby('city')['last_asking_price'].median().sort_values(ascending=False).reset_index()
 fig_city = px.bar(city_prices, x='city', y='last_asking_price',
-                  title='Gemiddelde Vraagprijs per Stad',
-                  labels={'city': 'Stad', 'last_asking_price': 'Gemiddelde Vraagprijs (€)'},
+                  title='Mediaan Vraagprijs per Stad',
+                  labels={'city': 'Stad', 'last_asking_price': 'Mediaan Vraagprijs (€)'},
                   color='city')
-fig_city.update_layout(xaxis_title="Stad", yaxis_title="Gemiddelde Vraagprijs (€)")
+fig_city.update_layout(xaxis_title="Stad", yaxis_title="Mediaan Vraagprijs (€)")
 st.plotly_chart(fig_city, use_container_width=True)
 
 # 3. Price vs surface area
@@ -112,7 +210,7 @@ fig2.update_layout(xaxis_title="Oppervlakte (m²)", yaxis_title="Vraagprijs (€
 st.plotly_chart(fig2, use_container_width=True)
 
 # 4. Sell duration histogram
-fig4 = px.histogram(df_filtered, x='sell_duration_days', nbins=200, color='city', barmode='stack',
+fig4 = px.histogram(df_filtered, x='sell_duration_days', nbins=200, color='city', 
                     title='Verdeling van verkooptijd (dagen)',
                     labels={'sell_duration_days': 'Aantal Dagen'})
 fig4.update_layout(xaxis_title="Aantal Dagen op de Markt", yaxis_title="Aantal Woningen", bargap=0.1)
@@ -162,12 +260,12 @@ st.plotly_chart(fig_aanbod, use_container_width=True)
 
 
 # # 2. Average price per city
-# city_prices = df.groupby('city')['last_asking_price'].mean().sort_values(ascending=False).reset_index()
+# city_prices = df.groupby('city')['last_asking_price'].median().sort_values(ascending=False).reset_index()
 # fig_city = px.bar(city_prices, x='city', y='last_asking_price',
-#                   title='Gemiddelde Vraagprijs per Stad',
-#                   labels={'city': 'Stad', 'last_asking_price': 'Gemiddelde Vraagprijs (€)'},
+#                   title='Mediaan Vraagprijs per Stad',
+#                   labels={'city': 'Stad', 'last_asking_price': 'Mediaan Vraagprijs (€)'},
 #                   color='city')
-# fig_city.update_layout(xaxis_title="Stad", yaxis_title="Gemiddelde Vraagprijs (€)")
+# fig_city.update_layout(xaxis_title="Stad", yaxis_title="Mediaan Vraagprijs (€)")
 # st.plotly_chart(fig_city, use_container_width=True)
 #
 
@@ -176,29 +274,29 @@ if city_selected != "Alle":
 
     # Now group by the cleaned listing type
     listing_type_prices = df_filtered.groupby("listing_type_clean")['last_asking_price'] \
-                            .mean() \
+                            .median() \
                             .sort_values(ascending=False) \
                             .reset_index()
 
     fig_listing_type = px.bar(listing_type_prices, x="listing_type_clean", y='last_asking_price',
-                              title=f'Gemiddelde vraagrprijs per woningtype in {city_selected}',
-                              labels={'listing_type':'woningtype', 'last_asking_price':'Gemiddelde vraagrprijs ()' })
-    fig_listing_type.update_layout(xaxis_title="Woningtype", yaxis_title="Gemiddelde laatste vraagprijs")
+                              title=f'Mediaan vraagrprijs per woningtype in {city_selected}',
+                              labels={'listing_type':'woningtype', 'last_asking_price':'Mediaan vraagrprijs ()' })
+    fig_listing_type.update_layout(xaxis_title="Woningtype", yaxis_title="Mediaan laatste vraagprijs")
                                     
     st.plotly_chart(fig_listing_type, use_container_width=True)
 
-
-
-if city_selected != "Alle":
-    # Now group by the cleaned listing type
-    neighborhood_prices = df_filtered.groupby("neighborhood")['last_asking_price'] \
-                            .mean() \
-                            .sort_values(ascending=False) \
-                            .reset_index()
-
-    fig_listing_type = px.bar(neighborhood_prices, x="neighborhood", y='last_asking_price',
-                              title=f'Gemiddelde vraagrprijs per buurt in {city_selected}',
-                              labels={'neighborhood':'buurt', 'last_asking_price':'Gemiddelde vraagrprijs ()' })
-    fig_listing_type.update_layout(xaxis_title="Buurt", yaxis_title="Gemiddelde laatste vraagprijs")
-                                    
-    st.plotly_chart(fig_listing_type, use_container_width=True)
+#
+#
+# if city_selected != "Alle":
+#     # Now group by the cleaned listing type
+#     neighborhood_prices = df_filtered.groupby("neighborhood")['last_asking_price'] \
+#                             .median() \
+#                             .sort_values(ascending=False) \
+#                             .reset_index()
+#
+#     fig_listing_type = px.bar(neighborhood_prices, x="neighborhood", y='last_asking_price',
+#                               title=f'Mediaan vraagprijs per buurt in {city_selected}',
+#                               labels={'neighborhood':'buurt', 'last_asking_price':'Mediaan vraagrprijs ()' })
+#     fig_listing_type.update_layout(xaxis_title="Buurt", yaxis_title="Mediaan laatste vraagprijs")
+#
+#     st.plotly_chart(fig_listing_type, use_container_width=True)
