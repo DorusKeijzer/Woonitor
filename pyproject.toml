@@ -26,3 +26,9 @@ prometheus-client = "^0.22.1"
 [tool.poetry.group.dashboard.dependencies]
 streamlit = "^1.37.0"
 plotly = "^6.3.0"
+geopandas = "^1.1.1"
+
+[tool.poetry.group.ml.dependencies]
+scikit-learn = "^1.7.1"
+fastapi = "^0.116.1"
+
