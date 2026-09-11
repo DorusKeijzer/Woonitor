@@ -33,11 +33,18 @@ QUEUE_METRICS_INTERVAL = int(os.getenv("QUEUE_METRICS_INTERVAL", "30"))
 # healthy backlog instead of only counting listing_queue.
 CITY_QUEUES = ["listing_queue", "listing_queue_dead"]
 
+# The crawler stores area as self.cleaned_area (area.lower().replace(" ", "-"),
+# e.g. "Den Haag" -> "den-haag"), not the display name from CRAWLER_AREAS -
+# normalize the same way so counts land on one key per city instead of
+# splitting into a zeroed "Den Haag" and a populated "den-haag".
+def _normalize(area):
+    return area.lower().replace(" ", "-")
+
 
 def count_by_city(queue_name):
     # Seed every known city at 0 so a city that has fully drained still
     # reports 0 instead of silently disappearing from the metric.
-    counts = {area: 0 for area in CRAWLER_AREAS}
+    counts = {_normalize(area): 0 for area in CRAWLER_AREAS}
     for raw in r.lrange(queue_name, 0, -1):
         try:
             area = json.loads(raw).get("area")
