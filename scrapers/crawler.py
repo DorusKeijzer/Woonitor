@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import redis
+import sys
 import uuid
 
 from dotenv import load_dotenv
@@ -232,7 +233,13 @@ if __name__ == "__main__":
     # search all cities at once regardless of what area was passed in, which
     # both mislabelled every listing's `area` field and made per-city control
     # impossible. Now each city gets its own paginated crawl, one after another.
-    for area in CRAWLER_AREAS:
+    #
+    # Optional CLI args restrict this run to specific cities (e.g. so
+    # different machines can crawl different cities in parallel instead of
+    # waiting through CRAWLER_AREAS sequentially on one host); with no args,
+    # falls back to the full list.
+    areas = sys.argv[1:] or CRAWLER_AREAS
+    for area in areas:
         crawler = Crawler(area)
         crawler.crawl_links()
 
