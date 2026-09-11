@@ -147,6 +147,16 @@ class Writer:
         """Reduce a string to just the numbers in the string and store as integer."""
         return int("".join([element for element in string if element in "0123456789"]))
 
+    def leading_int(self, text: str) -> Optional[int]:
+        """Extract the first integer in a string, e.g. '3 woonlagen' -> 3.
+
+        Unlike reduce_to_int, this doesn't concatenate every digit in the
+        string - needed for values with more than one number in them, e.g.
+        '1 badkamer en 1 apart toilet' (reduce_to_int would read that as 11).
+        """
+        match = re.search(r"\d+", text)
+        return int(match.group()) if match else None
+
     def parse_rooms(self, text: str) -> Tuple[int, Optional[int]]:
         """
         Extract total number of rooms and bedrooms from a Dutch real estate listing string.
@@ -256,6 +266,22 @@ class Writer:
 
         optional_fields = {
             "bedrooms": (int, type(None)),
+            "plot_size": (int, type(None)),
+            "volume": (int, type(None)),
+            "floor_count": (int, type(None)),
+            "bathroom_count": (int, type(None)),
+            "roof_type": (str, type(None)),
+            "construction_type": (str, type(None)),
+            "insulation": (str, type(None)),
+            "heating": (str, type(None)),
+            "garden": (str, type(None)),
+            "amenities": (str, type(None)),
+            "parking_type": (str, type(None)),
+            "location_description": (str, type(None)),
+            "shed": (str, type(None)),
+            "garage_type": (str, type(None)),
+            "balcony": (str, type(None)),
+            "description": (str, type(None)),
         }
 
         # Check required fields
@@ -296,26 +322,57 @@ class Writer:
         result["postcode"] = postcode
         result["city"] = city
 
-        # Field mapping: source -> target
+        # Field mapping: source -> target. Where two source keys map to the
+        # same target (surface_area), Funda's "Kenmerken" layout sometimes
+        # renders the first one as an empty section header rather than a real
+        # value (see the empty-value skip below) - later keys act as a
+        # fallback so the real value still gets picked up.
         field_map = {
             "Titel": "title",
             "Laatste vraagprijs": "last_asking_price",
             "Gebruiksoppervlakten": "surface_area",
+            "Wonen": "surface_area",
             "Soort appartement": "listing_type",
             "Soort woonhuis": "listing_type",
             "Verkoopdatum": "sell_date",
             "Aangeboden sinds": "offer_since",
             "Buurt": "neighborhood",
             "Energielabel": "energy_label",
-            "Bouwjaar": "building_year"
+            "Bouwjaar": "building_year",
+            "Perceel": "plot_size",
+            "Inhoud": "volume",
+            "Aantal woonlagen": "floor_count",
+            "Aantal badkamers": "bathroom_count",
+            "Soort dak": "roof_type",
+            "Soort bouw": "construction_type",
+            "Isolatie": "insulation",
+            "Verwarming": "heating",
+            "Tuin": "garden",
+            "Voorzieningen": "amenities",
+            "Soort parkeergelegenheid": "parking_type",
+            "Ligging": "location_description",
+            "Schuur/berging": "shed",
+            "Soort garage": "garage_type",
+            "Balkon/dakterras": "balcony",
+            "Omschrijving": "description",
         }
+
+        numeric_fields = {"last_asking_price", "surface_area", "plot_size", "volume"}
+        leading_int_fields = {"floor_count", "bathroom_count"}
 
         for src, dst in field_map.items():
             if src not in message:
                 continue
             value = message[src]
-            if dst in ["last_asking_price", "surface_area"]:
+            # Some Kenmerken rows are section headers with no real value
+            # (empty dd) - skip rather than crash, so a fallback source key
+            # (or nothing, if there truly is no data) can still apply.
+            if not value or not str(value).strip():
+                continue
+            if dst in numeric_fields:
                 result[dst] = self.reduce_to_int(value)
+            elif dst in leading_int_fields:
+                result[dst] = self.leading_int(value)
             elif dst in ["sell_date", "offer_since"]:
                 result[dst] = self.to_date(value)
             elif dst == "building_year":

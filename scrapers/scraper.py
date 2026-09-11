@@ -18,6 +18,7 @@ from config import (
     SCRAPER_BLOCKED_BACKOFF,
     SCRAPER_CONTENT_WAIT_MS,
     PLAYWRIGHT_HEADLESS,
+    NODE_NAME,
 )
 
 load_dotenv()
@@ -47,14 +48,22 @@ class Scraper:
         self.name= f"Scraper-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized scraper {self.name}.")
-        self.pages_scraped = Counter('scraper_pages_scraped', 'Number of pages scraped', registry=registry)
+        # Labeled by node (source machine) rather than just this process's
+        # random instance name, so Grafana can graph contribution per source
+        # machine across restarts (sum by (node) (...)) instead of per
+        # process instance name, which changes every restart.
+        self.pages_scraped = Counter(
+            'scraper_pages_scraped', 'Number of pages scraped', ['node'], registry=registry
+        )
         self.status_codes = Counter(
-            'scraper_http_status_codes_total', 
-            'Count of HTTP status codes', 
-            ['code'], 
+            'scraper_http_status_codes_total',
+            'Count of HTTP status codes',
+            ['code', 'node'],
             registry=registry
         )
-        self.captchas = Counter('scraper_captchas', 'Number of captchas served', registry=registry)
+        self.captchas = Counter(
+            'scraper_captchas', 'Number of captchas served', ['node'], registry=registry
+        )
         self._playwright = None
         self._browser = None
 
@@ -114,11 +123,11 @@ class Scraper:
             if response:
                 self.logger.info(f"Response status: {response.status}")
                 if response.status == 200:
-                    self.status_codes.labels(code='200').inc()
+                    self.status_codes.labels(code='200', node=NODE_NAME).inc()
                 if response.status == 403:
-                    self.status_codes.labels(code='403').inc()
+                    self.status_codes.labels(code='403', node=NODE_NAME).inc()
                 if response.status == 429:
-                    self.status_codes.labels(code='429').inc()
+                    self.status_codes.labels(code='429', node=NODE_NAME).inc()
             else:
                 self.logger.info(f"Response is empty")
 
@@ -148,7 +157,7 @@ class Scraper:
             if blocked:
                 if "Je bent bijna op de pagina die" in title:
                     self.logger.warning("Encountered captcha page, requeueing for retry")
-                    self.captchas.inc(1)
+                    self.captchas.labels(node=NODE_NAME).inc()
                 else:
                     self.logger.warning("Encountered storing page, requeueing for retry")
                 r.lpush("listing_queue", json.dumps({"url": relative_url}))
@@ -166,25 +175,49 @@ class Scraper:
 
             # --- purchase history --- #
             # contains: offered since, purchase date, duration
-            purchase_history = selector.css("section.mt-6.border-b.border-neutral-20 dl div").getall()
+            purchase_history = selector.css("section.mt-6.border-b.border-neutral-20 dl div")
             for element in purchase_history:
-                key = Selector(element).css("dt::text").get()
-                value = Selector(element).css("dd::text").get()
+                key, value = self._extract_row(element)
                 if key:
                     info[key] = value
 
             # --- features --- #
-            # contains: most everything else
-            features = selector.css("section#features div dl").getall()
-            for element in features:
-                key = Selector(element).css("dt::text").get()
-                value = Selector(element).css("dd span::text").get()
-                if key:
-                    info[key] = value
+            # contains: most everything else.
+            # NOTE: this used to select "section#features div dl" (the whole
+            # <dl> per kenmerken subsection) and grab just its first dt/dd via
+            # .get(). Unlike purchase_history above, this section's <dt>/<dd>
+            # pairs are bare alternating siblings inside each <dl> - no
+            # wrapping <div> - so every row after the first one in each
+            # subsection was silently dropped. Most Kenmerken fields (plot
+            # size, volume, insulation, heating, garden details, ...) never
+            # actually reached misc_data before this fix.
+            for dl in selector.css("section#features dl"):
+                dts = dl.css("dt")
+                dds = dl.css("dd")
+                for dt, dd in zip(dts, dds):
+                    key = "".join(dt.css("::text").getall()).strip()
+                    value = "".join(dd.css("::text").getall()).strip()
+                    if key:
+                        info[key] = value
+
+            # --- description --- #
+            # The visible text is CSS-clamped behind a "read more" toggle, but
+            # the full paragraph is already present in the DOM either way.
+            description_section = selector.css("section.whitespace-pre-wrap")
+            if description_section:
+                heading = description_section.css("h2::text").get() or ""
+                raw_text = " ".join(
+                    t.strip() for t in description_section.css("*::text").getall() if t.strip()
+                )
+                description = raw_text[len(heading):].strip() if raw_text.startswith(heading) else raw_text
+                for boilerplate in ("Lees de volledige omschrijving", "Toon minder"):
+                    description = description.replace(boilerplate, "").strip()
+                if description:
+                    info["Omschrijving"] = description
 
             self.logger.debug(f"Scraped fields: {list(info.keys())}")
 
-            self.pages_scraped.inc()
+            self.pages_scraped.labels(node=NODE_NAME).inc()
             r.lpush("data_queue", json.dumps(info))
             self._push_metrics()
 
@@ -194,6 +227,18 @@ class Scraper:
             sleep(sleeptime)
         finally:
             context.close()
+
+    def _extract_row(self, element):
+        """Extracts a (key, value) pair from a Funda dt/dd row.
+
+        Uses "::text" (all descendant text) rather than "dt::text"/"dd::text"
+        (direct text only) or "dd span::text" (requires a nested span) - not
+        every row wraps its value in a span, and using the stricter selectors
+        silently returned None for those.
+        """
+        key = "".join(element.css("dt ::text").getall()).strip()
+        value = "".join(element.css("dd ::text").getall()).strip()
+        return key, value
 
     def _push_metrics(self):
         try:

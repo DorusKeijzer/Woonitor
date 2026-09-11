@@ -19,6 +19,26 @@ CREATE TABLE listings (
     building_year DATE,
     scraped_at TIMESTAMP NOT NULL,
     url TEXT,
+
+    -- "Kenmerken" (features) fields promoted out of misc_data - see
+    -- ROADMAP.md "Tier 0" for why these were previously stuck there.
+    plot_size NUMERIC,               -- Perceel, m^2 (houses only, not apartments)
+    volume NUMERIC,                  -- Inhoud, m^3
+    floor_count INTEGER,             -- Aantal woonlagen
+    bathroom_count INTEGER,          -- Aantal badkamers
+    roof_type TEXT,                  -- Soort dak
+    construction_type TEXT,          -- Soort bouw (nieuwbouw/bestaande bouw)
+    insulation TEXT,                 -- Isolatie
+    heating TEXT,                    -- Verwarming
+    garden TEXT,                     -- Tuin
+    amenities TEXT,                  -- Voorzieningen
+    parking_type TEXT,               -- Soort parkeergelegenheid
+    location_description TEXT,       -- Ligging (free text, e.g. "aan rustige weg")
+    shed TEXT,                       -- Schuur/berging
+    garage_type TEXT,                -- Soort garage
+    balcony TEXT,                    -- Balkon/dakterras
+    description TEXT,                -- Full listing description ("Omschrijving")
+
     misc_data JSONB                   -- Other data from the listing
 );
 
