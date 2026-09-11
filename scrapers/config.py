@@ -33,6 +33,10 @@ CRAWLER_BASE_BACKOFF = 30 # seconds
 CRAWLER_MAX_BACKOFF = 480 # seconds
 CRAWLER_MAX_CONSECUTIVE_BLOCKS = 5
 
+# Same idea as SCRAPER_CONTENT_WAIT_MS: wait for an actual listing link to
+# show up instead of a full networkidle that rarely resolves.
+CRAWLER_CONTENT_WAIT_MS = 10_000
+
 # Funda sorts search results newest-first, so once a page yields zero URLs we
 # haven't already seen, everything past it is old news too. After this many
 # CONSECUTIVE all-already-seen pages, stop this city early instead of walking
@@ -47,6 +51,13 @@ SCRAPER_THROTTLE_SPEED_MAX = 5 #seconds
 
 # Backoff applied after a captcha/storing page before the URL is requeued.
 SCRAPER_BLOCKED_BACKOFF = 30 # seconds
+
+# How long to wait for the listing's actual content to show up before giving
+# up and treating the page as loaded (used to detect captcha/storing pages).
+# Much shorter than a full networkidle wait, which Funda's trackers/ads mean
+# almost never actually resolves - this waits for a specific real signal
+# instead of an idle network that may never come.
+SCRAPER_CONTENT_WAIT_MS = 10_000
 
 # --- WRITER --- #
 # Writer will flush buffer at every BATCH_SIZE listings OR after FLUSH_TIME_LIMIT seconds

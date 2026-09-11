@@ -21,6 +21,7 @@ from config import (
     CRAWLER_MAX_BACKOFF,
     CRAWLER_MAX_CONSECUTIVE_BLOCKS,
     CRAWLER_EARLY_STOP_EMPTY_PAGES,
+    CRAWLER_CONTENT_WAIT_MS,
     PLAYWRIGHT_HEADLESS,
 )
 load_dotenv()
@@ -90,6 +91,18 @@ class Crawler:
         page_number = 1
         consecutive_blocks = 0
         consecutive_empty_pages = 0
+
+        # One browser for the whole city instead of a fresh Chromium process
+        # per page - that repeated cold-start was pure overhead.
+        playwright = sync_playwright().start()
+        browser = playwright.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
+        try:
+            self._crawl_pages(browser, page_number, consecutive_blocks, consecutive_empty_pages)
+        finally:
+            browser.close()
+            playwright.stop()
+
+    def _crawl_pages(self, browser, page_number, consecutive_blocks, consecutive_empty_pages):
         while True:
 
             self.logger.info(f"Crawling page {page_number}")
@@ -109,99 +122,97 @@ class Crawler:
             blocked = False
             crawl_failed = False
             i = 0
-            with sync_playwright() as p:
+            context = browser.new_context(user_agent=ua)
+            try:
                 self.logger.info(f"Making request to {url} with user agent {ua} ...")
-                browser = p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
-                try:
-                    context = browser.new_context(user_agent=ua)
-                    page = context.new_page()
-                    response = page.goto(url)
-                    if response:
-                        self.logger.info(f"Response status: {response.status}")
-                        if response.status == 200:
-                            self.status_codes.labels(code='200').inc()
-                        if response.status == 403:
-                            self.status_codes.labels(code='403').inc()
-                            blocked = True
-                        if response.status == 429:
-                            self.status_codes.labels(code='429').inc()
-                            blocked = True
-                    else:
-                        self.logger.info(f"Response is empty")
+                page = context.new_page()
+                response = page.goto(url)
+                if response:
+                    self.logger.info(f"Response status: {response.status}")
+                    if response.status == 200:
+                        self.status_codes.labels(code='200').inc()
+                    if response.status == 403:
+                        self.status_codes.labels(code='403').inc()
+                        blocked = True
+                    if response.status == 429:
+                        self.status_codes.labels(code='429').inc()
+                        blocked = True
+                else:
+                    self.logger.info(f"Response is empty")
 
-                    if not blocked:
-                        # Funda sometimes serves the page slowly enough (ads,
-                        # trackers) that it never truly goes network-idle; a
-                        # hard failure here used to crash the whole crawler,
-                        # so fall back to whatever DOM is available instead.
-                        try:
-                            page.wait_for_load_state("networkidle")
-                        except PlaywrightTimeoutError:
-                            self.logger.warning("networkidle wait timed out, continuing with partial page")
+                if not blocked:
+                    # Wait for an actual listing link instead of full
+                    # networkidle, which Funda's ads/trackers mean rarely
+                    # resolves within any reasonable timeout. A blocked/empty
+                    # page never has one, so this just times out quickly there.
+                    try:
+                        page.wait_for_selector('a[href^="/detail/"]', timeout=CRAWLER_CONTENT_WAIT_MS)
+                    except PlaywrightTimeoutError:
+                        self.logger.warning("Timed out waiting for listings, checking page as-is")
 
-                        content = page.content()
-                        selector = Selector(text=content)
+                    content = page.content()
+                    selector = Selector(text=content)
 
-                        title = selector.css("title::text").get()
-                        self.logger.info(f"Page title: {title}")
+                    title = selector.css("title::text").get()
+                    self.logger.info(f"Page title: {title}")
 
-                        # Funda also blocks with HTTP 200 by serving a captcha
-                        # page (titled "Je bent bijna op de pagina die je
-                        # zoekt") or, on outages, a "Storing" page. Either way
-                        # there's nothing to parse, so treat it the same as a
-                        # 403/429: back off and retry.
-                        if title and "Je bent bijna op de pagina die" in title:
-                            self.logger.info("Encountered Captcha page")
-                            self.captchas.inc(1)
-                            blocked = True
-                        elif title and "Storing" in title:
-                            self.logger.info("Encountered storing page")
-                            self.storing.inc(1)
-                            blocked = True
+                    # Funda also blocks with HTTP 200 by serving a captcha
+                    # page (titled "Je bent bijna op de pagina die je
+                    # zoekt") or, on outages, a "Storing" page. Either way
+                    # there's nothing to parse, so treat it the same as a
+                    # 403/429: back off and retry.
+                    if title and "Je bent bijna op de pagina die" in title:
+                        self.logger.info("Encountered Captcha page")
+                        self.captchas.inc(1)
+                        blocked = True
+                    elif title and "Storing" in title:
+                        self.logger.info("Encountered storing page")
+                        self.storing.inc(1)
+                        blocked = True
 
-                    if not blocked:
-                        # Funda's wrapper markup around listing cards changes
-                        # periodically (this used to require a specific
-                        # Tailwind class combo that no longer matches
-                        # anything); grabbing every href and filtering by the
-                        # /detail/ prefix below is more resilient to that.
-                        urls = selector.css("a::attr(href)").getall()
+                if not blocked:
+                    # Funda's wrapper markup around listing cards changes
+                    # periodically (this used to require a specific
+                    # Tailwind class combo that no longer matches
+                    # anything); grabbing every href and filtering by the
+                    # /detail/ prefix below is more resilient to that.
+                    urls = selector.css("a::attr(href)").getall()
 
-                        # filter only listing pages while ommitting duplicates
-                        urls = list(set([u for u in urls if u.startswith("/detail/")]))
-                        self.logger.info(urls)
+                    # filter only listing pages while ommitting duplicates
+                    urls = list(set([u for u in urls if u.startswith("/detail/")]))
+                    self.logger.info(urls)
 
-                        for listing_url in urls:
-                            # Dedup is handled entirely by the Lua script (a
-                            # Redis set) and, downstream, the writer's
-                            # ON CONFLICT (funda_id); the crawler itself stays
-                            # stateless w.r.t. Postgres.
-                            listing = {
-                                "sender": self.name,
-                                "url": listing_url,
-                                "area": self.cleaned_area
-                            }
-                            pushed = dedup_push_script(
-                                keys=["listing_seen", "listing_queue"],
-                                args=[listing_url, json.dumps(listing)]
-                            )
+                    for listing_url in urls:
+                        # Dedup is handled entirely by the Lua script (a
+                        # Redis set) and, downstream, the writer's
+                        # ON CONFLICT (funda_id); the crawler itself stays
+                        # stateless w.r.t. Postgres.
+                        listing = {
+                            "sender": self.name,
+                            "url": listing_url,
+                            "area": self.cleaned_area
+                        }
+                        pushed = dedup_push_script(
+                            keys=["listing_seen", "listing_queue"],
+                            args=[listing_url, json.dumps(listing)]
+                        )
 
-                            if pushed == 1:
-                                self.new_pages_found.inc()
-                                i += 1
+                        if pushed == 1:
+                            self.new_pages_found.inc()
+                            i += 1
 
-                        self.logger.info(f"Succesfully pushed {i} urls.")
-                except Exception as e:
-                    # A crashed page/browser must not take the whole crawler
-                    # down (this used to happen on any Playwright timeout);
-                    # treat it like a block and retry the same page.
-                    self.logger.error(f"Failed to crawl page {page_number}: {e}")
-                    crawl_failed = True
-                finally:
-                    browser.close()
+                    self.logger.info(f"Succesfully pushed {i} urls.")
+            except Exception as e:
+                # A crashed page/browser must not take the whole crawler
+                # down (this used to happen on any Playwright timeout);
+                # treat it like a block and retry the same page.
+                self.logger.error(f"Failed to crawl page {page_number}: {e}")
+                crawl_failed = True
+            finally:
+                context.close()
 
-                push_to_gateway(PUSHGATEWAY_URL, job="crawler",
-                                 grouping_key={"instance": self.name}, registry=registry)
+            push_to_gateway(PUSHGATEWAY_URL, job="crawler",
+                             grouping_key={"instance": self.name}, registry=registry)
 
             if blocked or crawl_failed:
                 consecutive_blocks += 1

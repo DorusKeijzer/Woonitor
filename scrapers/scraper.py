@@ -16,6 +16,7 @@ from config import (
     SCRAPER_THROTTLE_SPEED_MIN,
     SCRAPER_THROTTLE_SPEED_MAX,
     SCRAPER_BLOCKED_BACKOFF,
+    SCRAPER_CONTENT_WAIT_MS,
     PLAYWRIGHT_HEADLESS,
 )
 
@@ -54,22 +55,32 @@ class Scraper:
             registry=registry
         )
         self.captchas = Counter('scraper_captchas', 'Number of captchas served', registry=registry)
-
+        self._playwright = None
+        self._browser = None
 
     def listen(self):
         """Listens to the redis message queue and scrapes the listings it receives"""
-        while True:
-            _, raw = r.brpop('listing_queue')
-            try:
-                url = json.loads(raw.decode()).get("url")
-                self.logger.info(f"Got URL: {url}")
-                self.scrape(url)
-            except Exception as e:
-                # A single bad listing (parse error, crashed browser, ...) must
-                # not take the whole worker down. Keep the raw payload around
-                # for inspection instead of silently dropping it.
-                self.logger.error(f"Failed to scrape listing, moving to dead-letter queue: {e}")
-                r.lpush("listing_queue_dead", raw)
+        # Launched once and reused across every listing instead of a fresh
+        # Chromium process per request - that repeated cold-start was pure
+        # overhead on top of the per-request throttle.
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
+        try:
+            while True:
+                _, raw = r.brpop('listing_queue')
+                try:
+                    url = json.loads(raw.decode()).get("url")
+                    self.logger.info(f"Got URL: {url}")
+                    self.scrape(url)
+                except Exception as e:
+                    # A single bad listing (parse error, crashed browser, ...) must
+                    # not take the whole worker down. Keep the raw payload around
+                    # for inspection instead of silently dropping it.
+                    self.logger.error(f"Failed to scrape listing, moving to dead-letter queue: {e}")
+                    r.lpush("listing_queue_dead", raw)
+        finally:
+            self._browser.close()
+            self._playwright.stop()
 
     def scrape(self, relative_url):
         """Scrapes all available data of the given listing and writes to the database"""
@@ -77,7 +88,7 @@ class Scraper:
 
         # take the penultimate part of the url when split at /
         # e.g. .../tilburg/appartement-de-fabrikant-type-c1-bouwnr-28/43859373/' -> [... 'tilburg', 'appartement-de-fabrikant-type-c1-bouwnr-28', '43859373', '']
-        funda_id = url.split("/")[-2] 
+        funda_id = url.split("/")[-2]
 
         info = {"funda_id" : funda_id, "url": url, "scraped_at" : datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
@@ -95,11 +106,10 @@ class Scraper:
 
         self.logger.info(f"Scraping page {url} with user agent {ua}")
 
-        with sync_playwright() as p:
-            self.logger.info(f"Making request to {url} ...")
-            browser = p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
-            context = browser.new_context(user_agent=ua)
+        context = self._browser.new_context(user_agent=ua)
+        try:
             page = context.new_page()
+            self.logger.info(f"Making request to {url} ...")
             response = page.goto(url)
             if response:
                 self.logger.info(f"Response status: {response.status}")
@@ -112,14 +122,15 @@ class Scraper:
             else:
                 self.logger.info(f"Response is empty")
 
-            # wait for the page to load. Funda sometimes serves the page slowly
-            # enough (ads/trackers) that it never truly goes network-idle; the
-            # listing content itself is already in the DOM well before that, so
-            # fall back to whatever loaded rather than aborting the whole scrape.
+            # Wait for the actual listing content instead of full networkidle,
+            # which Funda's ads/trackers mean rarely resolves within any
+            # reasonable timeout. A captcha/storing page never has div#about,
+            # so this just times out quickly there and falls through to the
+            # title check below, which handles it.
             try:
-                page.wait_for_load_state("networkidle")
+                page.wait_for_selector("div#about", timeout=SCRAPER_CONTENT_WAIT_MS)
             except PlaywrightTimeoutError:
-                self.logger.warning("networkidle wait timed out, continuing with partial page")
+                self.logger.warning("Timed out waiting for listing content, checking page as-is")
             content = page.content()
             selector = Selector(text = content)
 
@@ -140,7 +151,6 @@ class Scraper:
                     self.captchas.inc(1)
                 else:
                     self.logger.warning("Encountered storing page, requeueing for retry")
-                browser.close()
                 r.lpush("listing_queue", json.dumps({"url": relative_url}))
                 self._push_metrics()
                 sleep(SCRAPER_BLOCKED_BACKOFF)
@@ -150,7 +160,7 @@ class Scraper:
             # Contains: address, postal code, neighborhood
             about_box = selector.css("div#about")
 
-            info["Titel"] = about_box.css("h1 span::text").get() 
+            info["Titel"] = about_box.css("h1 span::text").get()
             info["Postcode"] = about_box.css("span.text-neutral-40::text").get()
             info["Buurt"] = about_box.css("a.ml-2.text-secondary-70::text").get()
 
@@ -174,7 +184,6 @@ class Scraper:
 
             self.logger.debug(f"Scraped fields: {list(info.keys())}")
 
-            browser.close()
             self.pages_scraped.inc()
             r.lpush("data_queue", json.dumps(info))
             self._push_metrics()
@@ -183,6 +192,8 @@ class Scraper:
             sleeptime = random() * (SCRAPER_THROTTLE_SPEED_MAX - SCRAPER_THROTTLE_SPEED_MIN) + SCRAPER_THROTTLE_SPEED_MIN
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
+        finally:
+            context.close()
 
     def _push_metrics(self):
         try:
