@@ -45,6 +45,7 @@ services:
       dockerfile: writer.dockerfile
     env_file: .env
     command: ["python", "scrapers/writer.py"]
+    restart: unless-stopped
     profiles: ["writer"]
 
   prometheus:
