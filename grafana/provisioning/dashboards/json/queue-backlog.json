@@ -1,0 +1,74 @@
+{
+  "title": "Redis Queue Backlog by City",
+  "uid": "redis-queue-backlog",
+  "editable": true,
+  "schemaVersion": 39,
+  "timezone": "",
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "listing_queue backlog by city",
+      "type": "bargauge",
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "redis_queue_city_size{queue=\"listing_queue\"}",
+          "legendFormat": "{{city}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {"mode": "continuous-BlPu"}
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "listing_queue_dead backlog by city",
+      "type": "bargauge",
+      "gridPos": {"h": 10, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "redis_queue_city_size{queue=\"listing_queue_dead\"}",
+          "legendFormat": "{{city}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {"mode": "continuous-RdYlGr"}
+        },
+        "overrides": []
+      }
+    }
+  ]
+}
