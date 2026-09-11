@@ -1,5 +1,10 @@
 import os
 
+# Identifies which machine a process is running on (e.g. "strato_II",
+# "laptop", "z800-ts") so Prometheus metrics can be broken down per source
+# machine instead of per random per-process instance name. Set in .env.
+NODE_NAME = os.getenv("NODE_NAME", "unknown")
+
 # --- BROWSER --- #
 # Funda's anti-bot may fingerprint headless Chromium more aggressively than a
 # headed one, which is why this used to be hardcoded to headless=False (running
