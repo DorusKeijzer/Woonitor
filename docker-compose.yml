@@ -65,7 +65,11 @@ services:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
     ports:
-      - "3000:3000"
+      # Bound to localhost only: this instance was publicly exposed on 3000 for
+      # 13 months and got repeatedly compromised via its API (rogue admin
+      # service accounts + dozens of probe datasources scanning the internal
+      # network). Reach it via `ssh -L 3000:localhost:3000 <host>` instead.
+      - "127.0.0.1:3000:3000"
     env_file: .env
     profiles: ["backend"]
     depends_on:
