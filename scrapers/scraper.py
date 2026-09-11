@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 from parsel import Selector
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from prometheus_client import CollectorRegistry, Gauge, Counter, push_to_gateway
 from random import random, choice
 from time import sleep
@@ -112,8 +112,14 @@ class Scraper:
             else:
                 self.logger.info(f"Response is empty")
 
-            # wait for the page to load
-            page.wait_for_load_state("networkidle")
+            # wait for the page to load. Funda sometimes serves the page slowly
+            # enough (ads/trackers) that it never truly goes network-idle; the
+            # listing content itself is already in the DOM well before that, so
+            # fall back to whatever loaded rather than aborting the whole scrape.
+            try:
+                page.wait_for_load_state("networkidle")
+            except PlaywrightTimeoutError:
+                self.logger.warning("networkidle wait timed out, continuing with partial page")
             content = page.content()
             selector = Selector(text = content)
 
