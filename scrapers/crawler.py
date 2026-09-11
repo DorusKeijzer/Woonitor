@@ -157,8 +157,12 @@ class Crawler:
                             blocked = True
 
                     if not blocked:
-                        # gets the listing urls from the ordered list
-                        urls = selector.css("div.flex.flex-col.gap-3.mt-4 a::attr(href)").getall()
+                        # Funda's wrapper markup around listing cards changes
+                        # periodically (this used to require a specific
+                        # Tailwind class combo that no longer matches
+                        # anything); grabbing every href and filtering by the
+                        # /detail/ prefix below is more resilient to that.
+                        urls = selector.css("a::attr(href)").getall()
 
                         # filter only listing pages while ommitting duplicates
                         urls = list(set([u for u in urls if u.startswith("/detail/")]))
