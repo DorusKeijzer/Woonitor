@@ -39,7 +39,7 @@ def get_listings():
           AND offer_since IS NOT NULL
           AND city IS NOT NULL
           AND energy_label IS NOT NULL
-          AND city IN ('Amsterdam', 'Rotterdam', 'Den', 'Groningen', 'Tilburg', 'Eindhoven', 'Utrecht')
+          AND city IN ('Amsterdam', 'Rotterdam', 'Den Haag', 'Groningen', 'Tilburg', 'Eindhoven', 'Utrecht')
           AND sell_date > '2025-02-01'
         LIMIT 100000;
     """
@@ -60,7 +60,7 @@ df = get_listings()
 
 # Sidebar city selector
 st.sidebar.title("Selecteer Stad")
-city_selected = st.sidebar.selectbox("Kies een stad:", ["Alle", "Tilburg", "Eindhoven", "Utrecht", "Den", "Amsterdam", "Groningen", "Rotterdam"])
+city_selected = st.sidebar.selectbox("Kies een stad:", ["Alle", "Tilburg", "Eindhoven", "Utrecht", "Den Haag", "Amsterdam", "Groningen", "Rotterdam"])
 
 if city_selected != "Alle":
     df_filtered = df[df['city'].str.lower() == city_selected.lower()]
@@ -87,7 +87,7 @@ if city_selected != "Alle":
     geojson_map = {
         "Amsterdam": geojson_dir / "Amsterdam.geojson",
         "Rotterdam": geojson_dir / "Rotterdam.geojson",
-        # "Den": geojson_dir / "Den_Haag.geojson",  # adjust if 'Den' isn't Den Haag
+        "Den Haag": geojson_dir / "Den_Haag.geojson",
         "Groningen": geojson_dir / "Groningen.geojson",
         "Tilburg": geojson_dir / "Tilburg.geojson",
         "Eindhoven": geojson_dir / "Eindhoven.geojson",
