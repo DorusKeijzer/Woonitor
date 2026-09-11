@@ -15,6 +15,18 @@ CRAWLER_THROTTLE_SPEED_MAX = 10 #seconds
 # Funda caps search results at ~9990 listings / 166 pages of 60 results.
 CRAWLER_MAX_PAGES = 166
 
+# Cities the crawler cycles through in one run. Matches what the dashboard's
+# geojsons and the writer's city filters already assume.
+CRAWLER_AREAS = [
+    "Tilburg",
+    "Amsterdam",
+    "Rotterdam",
+    "Den Haag",
+    "Utrecht",
+    "Eindhoven",
+    "Groningen",
+]
+
 # Backoff applied (in addition to the normal throttle) after a 403/429 response,
 # doubling on consecutive blocks up to CRAWLER_MAX_BACKOFF, then giving up on that page.
 CRAWLER_BASE_BACKOFF = 30 # seconds

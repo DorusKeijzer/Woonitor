@@ -15,6 +15,7 @@ from config import (
     CRAWLER_THROTTLE_SPEED_MAX,
     CRAWLER_THROTTLE_SPEED_MIN,
     CRAWLER_MAX_PAGES,
+    CRAWLER_AREAS,
     CRAWLER_BASE_BACKOFF,
     CRAWLER_MAX_BACKOFF,
     CRAWLER_MAX_CONSECUTIVE_BLOCKS,
@@ -215,7 +216,12 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    crawler = Crawler("Tilburg")
-    crawler.crawl_links()
+    # Restores multi-city crawling: previously the base_url was hardcoded to
+    # search all cities at once regardless of what area was passed in, which
+    # both mislabelled every listing's `area` field and made per-city control
+    # impossible. Now each city gets its own paginated crawl, one after another.
+    for area in CRAWLER_AREAS:
+        crawler = Crawler(area)
+        crawler.crawl_links()
 
     
