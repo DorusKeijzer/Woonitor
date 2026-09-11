@@ -58,6 +58,22 @@ dedup_push_script = r.register_script("""
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 registry = CollectorRegistry()
 
+# Module-level (not per-Crawler-instance): __main__ creates a new Crawler per
+# city in the same process, and prometheus_client raises on registering a
+# second Counter with the same name against the same registry. These are
+# process-wide totals anyway, not per-city, so one shared instance is also
+# the more correct model - this crashed the very first time a city ever
+# actually finished and the loop moved on to the next one.
+new_pages_found_counter = Counter('crawler_new_pages_found_total', 'Number of new pages found', registry=registry)
+status_codes_counter = Counter(
+    'crawler_http_status_codes_total',
+    'Count of HTTP status codes',
+    ['code'],
+    registry=registry
+)
+captchas_counter = Counter('crawler_captchas', 'Number of captchas served', registry=registry)
+storing_counter = Counter('crawler_storing', 'Number of storingen served', registry=registry)
+
 # NOTE: the crawler used to also open a Postgres connection to skip URLs already
 # present in `listings`, but that check was buggy (compared against the whole
 # `urls` list instead of a single url) and redundant: the Redis `listing_seen`
@@ -76,16 +92,11 @@ class Crawler:
         self.name = f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized crawler {self.name}.")
-        # prometheus information
-        self.new_pages_found = Counter('crawler_new_pages_found_total', 'Number of new pages found', registry=registry)
-        self.status_codes = Counter(
-            'crawler_http_status_codes_total', 
-            'Count of HTTP status codes', 
-            ['code'], 
-            registry=registry
-        )
-        self.captchas = Counter('crawler_captchas', 'Number of captchas served', registry=registry)
-        self.storing = Counter('crawler_storing', 'Number of storingen served', registry=registry)
+        # prometheus information (shared across cities, see module-level comment above)
+        self.new_pages_found = new_pages_found_counter
+        self.status_codes = status_codes_counter
+        self.captchas = captchas_counter
+        self.storing = storing_counter
 
     def crawl_links(self):
         page_number = 1
