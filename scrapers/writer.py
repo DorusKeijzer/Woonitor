@@ -57,7 +57,7 @@ class Writer:
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized writer {self.name}.")
         self.conn = conn
-        self.writes = Counter('writer_writes', 'Number of succesful writes by writers', ["writes"], registry=registry)
+        self.writes = Counter('writer_writes', 'Number of succesful writes by writers', ["status"], registry=registry)
 
     def listen(self):
         batch = []
@@ -97,14 +97,17 @@ class Writer:
         if not listings:
             return
 
-        columns = list(listings[0].keys())
+        # Listings don't all share the same keys (e.g. "bedrooms" is only present
+        # when "Aantal kamers" was scraped), so take the union of columns across
+        # the whole batch rather than assuming the first row has them all.
+        columns = sorted({col for listing in listings for col in listing.keys()})
 
-        # Wrap misc_data in Json 
+        # Wrap misc_data in Json
         values = []
         for listing in listings:
             row = []
             for col in columns:
-                value = listing[col]
+                value = listing.get(col)
                 if col == "misc_data" and isinstance(value, dict):
                     row.append(Json(value))
                 else:
@@ -128,15 +131,15 @@ class Writer:
                 cur.executemany(insert_query, values)
             self.conn.commit()
             self.logger.info(f"Wrote batch of {len(listings)} listings to database")
-            self.writes.labels(code='success').inc()
+            self.writes.labels(status='success').inc()
         except Exception as e:
             self.logger.error(f"Failed to write batch: {e}")
-            self.writes.labels(code='failure').inc()
+            self.writes.labels(status='failure').inc()
             self.conn.rollback()
  
-        push_to_gateway(PUSHGATEWAY_URL, 
-                        job=self.name, 
-                        # instance= self.name, 
+        push_to_gateway(PUSHGATEWAY_URL,
+                        job="writer",
+                        grouping_key={"instance": self.name},
                         registry=registry)
 
 
@@ -198,18 +201,23 @@ class Writer:
         """
         Splits a Dutch-style postcode and city string into postcode and city.
 
-        Example:
+        Examples:
             "5035 DD Tilburg" -> ("5035 DD", "Tilburg")
+            "2511 CV Den Haag" -> ("2511 CV", "Den Haag")
 
-        Assumes input always has exactly 3 parts.
+        Assumes the first two tokens are the postcode and everything after is
+        the (possibly multi-word) city name.
         """
         parts = postcode_str.strip().split()
         postcode = f"{parts[0]} {parts[1]}"
-        city = parts[2]
+        city = " ".join(parts[2:])
         return postcode, city
 
     def validate_input(self, message) -> bool:
-        required_fields = ["funda_id", "url", "scraped_at", "Postcode"]
+        # "Titel" is required as a defense against captcha/"Storing" pages the
+        # scraper failed to catch: those pages never expose Postcode either, but
+        # this check is cheap insurance in case Funda's markup changes again.
+        required_fields = ["funda_id", "url", "scraped_at", "Postcode", "Titel"]
         missing = [f for f in required_fields if f not in message]
 
         if missing != []:

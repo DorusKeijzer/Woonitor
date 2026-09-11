@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import psycopg
 import redis
 import uuid
 
@@ -10,14 +9,21 @@ from parsel import Selector
 from playwright.sync_api import sync_playwright
 from prometheus_client import CollectorRegistry, Gauge, Counter, push_to_gateway
 from random import random, choice
-from sys import exit
 from time import sleep
 
-from config import CRAWLER_THROTTLE_SPEED_MAX, CRAWLER_THROTTLE_SPEED_MIN
-load_dotenv()   
+from config import (
+    CRAWLER_THROTTLE_SPEED_MAX,
+    CRAWLER_THROTTLE_SPEED_MIN,
+    CRAWLER_MAX_PAGES,
+    CRAWLER_BASE_BACKOFF,
+    CRAWLER_MAX_BACKOFF,
+    CRAWLER_MAX_CONSECUTIVE_BLOCKS,
+    PLAYWRIGHT_HEADLESS,
+)
+load_dotenv()
 
 logging.basicConfig(
-    level=logging.INFO,  
+    level=logging.INFO,
     format='[%(asctime)s] [%(levelname)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
@@ -48,20 +54,12 @@ dedup_push_script = r.register_script("""
 PUSHGATEWAY_URL = os.getenv("PUSHGATEWAY_URL", "localhost:9091")
 registry = CollectorRegistry()
 
-# postgres connection
-print("Connecting to postgres")
-try: 
-    conn = psycopg.connect(f"host={os.getenv("POSTGRES_HOST")} \
-                    connect_timeout=10 \
-                    dbname={os.getenv("POSTGRES_DB")}\
-                    user={os.getenv("POSTGRES_USER")}\
-                    password={os.getenv("POSTGRES_PASSWORD")}")
-    print("connection: ", conn)
-except psycopg.OperationalError as e:
-    print("connection failed")
-    raise e 
-
-cur = conn.cursor()
+# NOTE: the crawler used to also open a Postgres connection to skip URLs already
+# present in `listings`, but that check was buggy (compared against the whole
+# `urls` list instead of a single url) and redundant: the Redis `listing_seen`
+# set below already dedups within a run, and the writer's `ON CONFLICT
+# (funda_id) DO NOTHING` dedups at the database level. The crawler stays
+# stateless with respect to Postgres.
 
 
 class Crawler:
@@ -69,12 +67,9 @@ class Crawler:
     def __init__(self, area: str):
         self.area = area
         self.cleaned_area = area.lower().replace(" ", "-")
-        self.base_url = 'https://www.funda.nl/zoeken/koop?selected_area=["tilburg","amsterdam","rotterdam","den-haag","utrecht","eindhoven","groningen"]&availability=["unavailable"]&search_result='
+        self.base_url = f'https://www.funda.nl/zoeken/koop/?selected_area=["{self.cleaned_area}"]&availability=["unavailable"]&search_result='
 
-
-        # self.base_url = f"https://www.funda.nl/zoeken/koop/?selected_area=[\"{self.cleaned_area}\"]&availability=[\"unavailable\"]&search_result="
-        # self.name= f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
-        self.name= f"Crawler-All-{uuid.uuid4().hex[:6]}"
+        self.name = f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
         self.logger.info(f"Initialized crawler {self.name}.")
         # prometheus information
@@ -90,6 +85,7 @@ class Crawler:
 
     def crawl_links(self):
         page_number = 1
+        consecutive_blocks = 0
         while True:
 
             self.logger.info(f"Crawling page {page_number}")
@@ -108,24 +104,44 @@ class Crawler:
 
             with sync_playwright() as p:
                 self.logger.info(f"Making request to {url} with user agent {ua} ...")
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
                 context = browser.new_context(user_agent=ua)
                 page = context.new_page()
-                response = page.goto(url)            
+                response = page.goto(url)
+                blocked = False
                 if response:
                     self.logger.info(f"Response status: {response.status}")
                     if response.status == 200:
                         self.status_codes.labels(code='200').inc()
                     if response.status == 403:
                         self.status_codes.labels(code='403').inc()
+                        blocked = True
                     if response.status == 429:
                         self.status_codes.labels(code='429').inc()
-
-                    # if response.status in [403,429]:
-                        # self.logger.info(f"Exiting because of encountering status code {response.status}")
-                        # exit(1)
+                        blocked = True
                 else:
                     self.logger.info(f"Response is empty")
+
+                if blocked:
+                    browser.close()
+                    consecutive_blocks += 1
+                    if consecutive_blocks > CRAWLER_MAX_CONSECUTIVE_BLOCKS:
+                        self.logger.error(
+                            f"Gave up after {consecutive_blocks} consecutive blocks on page {page_number}"
+                        )
+                        push_to_gateway(PUSHGATEWAY_URL, job="crawler",
+                                         grouping_key={"instance": self.name}, registry=registry)
+                        return
+                    backoff = min(CRAWLER_MAX_BACKOFF, CRAWLER_BASE_BACKOFF * 2 ** (consecutive_blocks - 1))
+                    self.logger.warning(f"Blocked ({response.status if response else 'no response'}), "
+                                         f"backing off {backoff}s before retrying page {page_number}")
+                    push_to_gateway(PUSHGATEWAY_URL, job="crawler",
+                                     grouping_key={"instance": self.name}, registry=registry)
+                    sleep(backoff)
+                    continue  # retry the same page_number
+
+                consecutive_blocks = 0
+
                 # wait for the page to load
                 page.wait_for_load_state("networkidle")
                 content = page.content()
@@ -156,36 +172,32 @@ class Crawler:
                 self.logger.info(urls)
 
 
-                i = 0 
-                for url in urls:
-                    # filter if url already in postgres
-                    cur.execute("SELECT 1 FROM listings WHERE url = %s LIMIT 1;", (urls,))
-                    if cur.fetchone():
-                        continue
-                    
+                i = 0
+                for listing_url in urls:
+                    # Dedup is handled entirely by the Lua script (a Redis set)
+                    # and, downstream, the writer's ON CONFLICT (funda_id); the
+                    # crawler itself stays stateless w.r.t. Postgres.
                     listing = {
                         "sender": self.name,
-                        "url": url,
+                        "url": listing_url,
                         "area": self.cleaned_area
                     }
                     pushed = dedup_push_script(
                         keys=["listing_seen", "listing_queue"],
-                        args=[url, json.dumps(listing)]
+                        args=[listing_url, json.dumps(listing)]
                     )
 
-                    # only push if no duplicate in redis or postgres
                     if pushed == 1:
                         self.new_pages_found.inc()
                         i += 1
-                
-                push_to_gateway(PUSHGATEWAY_URL, 
-                                job=self.name, 
-                                # instance= self.name, 
+
+                push_to_gateway(PUSHGATEWAY_URL,
+                                job="crawler",
+                                grouping_key={"instance": self.name},
                                 registry=registry)
 
-
                 self.logger.info(f"Succesfully pushed {i} urls.")
-                
+
                 browser.close()
 
             page_number += 1
@@ -194,9 +206,9 @@ class Crawler:
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
 
-            if page_number > 166:
+            if page_number > CRAWLER_MAX_PAGES:
                 self.logger.info(f"Quitting because page number is {page_number}")
-                quit(0)
+                return
 
 
 

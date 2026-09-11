@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import psycopg
 import redis
 import uuid
 
@@ -11,10 +10,14 @@ from parsel import Selector
 from playwright.sync_api import sync_playwright
 from prometheus_client import CollectorRegistry, Gauge, Counter, push_to_gateway
 from random import random, choice
-from sys import exit
 from time import sleep
 
-from config import SCRAPER_THROTTLE_SPEED_MIN, SCRAPER_THROTTLE_SPEED_MAX
+from config import (
+    SCRAPER_THROTTLE_SPEED_MIN,
+    SCRAPER_THROTTLE_SPEED_MAX,
+    SCRAPER_BLOCKED_BACKOFF,
+    PLAYWRIGHT_HEADLESS,
+)
 
 load_dotenv()
 
@@ -57,13 +60,20 @@ class Scraper:
         """Listens to the redis message queue and scrapes the listings it receives"""
         while True:
             _, raw = r.brpop('listing_queue')
-            url = json.loads(raw.decode()).get("url")
-            self.logger.info(f"Got URL: {url}")
-            self.scrape(url)
-            
-    def scrape(self, url):
+            try:
+                url = json.loads(raw.decode()).get("url")
+                self.logger.info(f"Got URL: {url}")
+                self.scrape(url)
+            except Exception as e:
+                # A single bad listing (parse error, crashed browser, ...) must
+                # not take the whole worker down. Keep the raw payload around
+                # for inspection instead of silently dropping it.
+                self.logger.error(f"Failed to scrape listing, moving to dead-letter queue: {e}")
+                r.lpush("listing_queue_dead", raw)
+
+    def scrape(self, relative_url):
         """Scrapes all available data of the given listing and writes to the database"""
-        url = "https://www.funda.nl" + url
+        url = "https://www.funda.nl" + relative_url
 
         # take the penultimate part of the url when split at /
         # e.g. .../tilburg/appartement-de-fabrikant-type-c1-bouwnr-28/43859373/' -> [... 'tilburg', 'appartement-de-fabrikant-type-c1-bouwnr-28', '43859373', '']
@@ -87,10 +97,10 @@ class Scraper:
 
         with sync_playwright() as p:
             self.logger.info(f"Making request to {url} ...")
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
             context = browser.new_context(user_agent=ua)
             page = context.new_page()
-            response = page.goto(url)            
+            response = page.goto(url)
             if response:
                 self.logger.info(f"Response status: {response.status}")
                 if response.status == 200:
@@ -99,12 +109,6 @@ class Scraper:
                     self.status_codes.labels(code='403').inc()
                 if response.status == 429:
                     self.status_codes.labels(code='429').inc()
-
-
-                # if response.status in [403,429]:
-                #     self.logger.info(f"Exiting because of encountering status code {response.status}")
-                #     exit(1)
-
             else:
                 self.logger.info(f"Response is empty")
 
@@ -115,16 +119,27 @@ class Scraper:
 
             title = selector.css("title::text").get()
             self.logger.info(f"Page title: {title}")
-            print(type(title))
 
-            # Funda serves a page titled "Je bent bijna op de pagina die je zoekt" 
-            # and a captcha if it suspect bot activity
-            if title and "Je bent bijna op de pagina die" in title:
-                self.logger.info("Encountered Captcha page")
-                self.captchas.inc(1)
-                # self.logger.info("Exiting because served captcha page")
-                # exit(1)
-            
+            # Funda serves a page titled "Je bent bijna op de pagina die je zoekt"
+            # and a captcha if it suspects bot activity, and a "Storing" page on
+            # outages. Either way there's no listing data on the page, so treat
+            # it as a transient failure: requeue the URL for a later retry
+            # instead of writing a near-empty row to data_queue.
+            blocked = bool(title) and (
+                "Je bent bijna op de pagina die" in title or "Storing" in title
+            )
+            if blocked:
+                if "Je bent bijna op de pagina die" in title:
+                    self.logger.warning("Encountered captcha page, requeueing for retry")
+                    self.captchas.inc(1)
+                else:
+                    self.logger.warning("Encountered storing page, requeueing for retry")
+                browser.close()
+                r.lpush("listing_queue", json.dumps({"url": relative_url}))
+                self._push_metrics()
+                sleep(SCRAPER_BLOCKED_BACKOFF)
+                return
+
             # --- about box --- #
             # Contains: address, postal code, neighborhood
             about_box = selector.css("div#about")
@@ -151,28 +166,24 @@ class Scraper:
                 if key:
                     info[key] = value
 
-            for key in info.keys():
-                print(f"{key}: {info[key]}")
+            self.logger.debug(f"Scraped fields: {list(info.keys())}")
 
             browser.close()
             self.pages_scraped.inc()
             r.lpush("data_queue", json.dumps(info))
- 
-            try: 
-                push_to_gateway(PUSHGATEWAY_URL, 
-
-                                job=self.name, 
-                                # instance= self.name, 
-                                registry=registry)
-
-            except Exception as e:
-                self.logger.info(f"failed to push metrics {e}")
+            self._push_metrics()
 
             # sleep for a while
             sleeptime = random() * (SCRAPER_THROTTLE_SPEED_MAX - SCRAPER_THROTTLE_SPEED_MIN) + SCRAPER_THROTTLE_SPEED_MIN
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
 
+    def _push_metrics(self):
+        try:
+            push_to_gateway(PUSHGATEWAY_URL, job="scraper",
+                             grouping_key={"instance": self.name}, registry=registry)
+        except Exception as e:
+            self.logger.info(f"failed to push metrics {e}")
 
 
 if __name__ == "__main__":

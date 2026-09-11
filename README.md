@@ -1,6 +1,47 @@
-Here live the crawlers, writers and scrapers. The crawler's role is to find urls for a given region and write these to a redis message queue. The scraper's role is to listen to the message queue and to visit the crawled urls and to write the info of the listing to another message queue. The writer in turn listens to the scraped data message queue and writes the data to the database. 
+# Woonitor
+
+Woonitor scrapes sold Funda.nl listings, stores them in Postgres, visualises the
+market in a Streamlit dashboard, and (work in progress, see [ROADMAP.md](ROADMAP.md))
+models asking prices. It is a personal/portfolio project — see the "Status &
+limitations" section below before trusting any number it produces.
+
+```
+crawler ──▶ redis queue ──▶ scraper ──▶ redis queue ──▶ writer ──▶ postgres
+                                                                     │
+                              ┌──────────────────────────────────────┤
+                     streamlit dashboard                    machine_learning/
+prometheus + pushgateway + grafana + exporters observe all of the above
+```
+
+- **crawler** — given an area (e.g. "Tilburg"), pages through Funda's search
+  results for that area and pushes listing URLs onto a Redis queue, deduping
+  against a Redis set.
+- **scraper** — listens on that queue, visits each listing with Playwright, and
+  pushes the scraped fields onto a second Redis queue.
+- **writer** — listens on the scraped-data queue, validates and transforms each
+  message into the `listings` schema, and batch-inserts into Postgres
+  (`ON CONFLICT (funda_id) DO NOTHING`).
+- **dashboard** (`dashboard/app.py`) — Streamlit app with price/time-on-market
+  trends, a neighbourhood choropleth, and energy-label breakdowns.
+- **machine_learning/** — asking-price modelling; currently a research script,
+  see the roadmap for the plan to turn it into a proper pipeline + API.
+- **monitoring** — each service pushes metrics to a Prometheus Pushgateway;
+  Prometheus scrapes it plus Postgres/Redis exporters, Grafana visualises it.
 
 These services are orchestrated using [docker-compose](https://docs.docker.com/compose/), and work can (optionally) be distributed between multiple machines, you just need to choose which machine performs which task.
+
+## Status & limitations
+
+- Funda only exposes **asking price**, not the actual sale price — every price
+  figure in this project is an asking price.
+- Only *sold* listings are scraped (`availability=unavailable`), which is a
+  selection bias for any time-on-market analysis.
+- Funda caps search results at ~9990 listings per query, so no city's history is
+  ever fully captured.
+- This is a personal project scraping a third party's website; it's built for
+  learning/portfolio purposes, not resale or high-volume use.
+- See [ROADMAP.md](ROADMAP.md) for the full list of known gaps and the plan to
+  address them.
 
 # Getting started
 First clone this repo to every machine you are using, then determine which machine will host the backend (message queue, database, monitoring) that the crawlers write to. this should be 1 and no more than 1 machine. If you have made your decision, create the `.env` files according to the instructions below. If you have just one machine at your disposal, use that machine for everything.
