@@ -20,6 +20,7 @@ from config import (
     CRAWLER_BASE_BACKOFF,
     CRAWLER_MAX_BACKOFF,
     CRAWLER_MAX_CONSECUTIVE_BLOCKS,
+    CRAWLER_EARLY_STOP_EMPTY_PAGES,
     PLAYWRIGHT_HEADLESS,
 )
 load_dotenv()
@@ -88,6 +89,7 @@ class Crawler:
     def crawl_links(self):
         page_number = 1
         consecutive_blocks = 0
+        consecutive_empty_pages = 0
         while True:
 
             self.logger.info(f"Crawling page {page_number}")
@@ -214,6 +216,19 @@ class Crawler:
                 continue  # retry the same page_number
 
             consecutive_blocks = 0
+
+            if i == 0:
+                consecutive_empty_pages += 1
+            else:
+                consecutive_empty_pages = 0
+
+            if consecutive_empty_pages >= CRAWLER_EARLY_STOP_EMPTY_PAGES:
+                self.logger.info(
+                    f"{consecutive_empty_pages} consecutive pages with no new listings, "
+                    f"assuming we've caught up on {self.area} - stopping early at page {page_number}"
+                )
+                return
+
             page_number += 1
             sleeptime = random() * (CRAWLER_THROTTLE_SPEED_MAX - CRAWLER_THROTTLE_SPEED_MIN) + CRAWLER_THROTTLE_SPEED_MIN
 

@@ -33,6 +33,13 @@ CRAWLER_BASE_BACKOFF = 30 # seconds
 CRAWLER_MAX_BACKOFF = 480 # seconds
 CRAWLER_MAX_CONSECUTIVE_BLOCKS = 5
 
+# Funda sorts search results newest-first, so once a page yields zero URLs we
+# haven't already seen, everything past it is old news too. After this many
+# CONSECUTIVE all-already-seen pages, stop this city early instead of walking
+# all CRAWLER_MAX_PAGES every run. Requires a few in a row (not just one) so a
+# single freak empty page doesn't cut a run short.
+CRAWLER_EARLY_STOP_EMPTY_PAGES = 3
+
 # --- SCRAPER --- #
 # Sleeping delay is picked uniformly between MIN and MAX:
 SCRAPER_THROTTLE_SPEED_MIN = 2.5 #seconds
