@@ -27,8 +27,8 @@ services:
     env_file: .env
     # The new, working command for the scraper service
     # command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && /app/.venv/bin/python scrapers/scraper.py"]
-    command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/scraper.py"]
-    # command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/scraper.py"]
+    command: ["bash", "-c", "rm -f /tmp/.X99-lock && Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/scraper.py"]
+    # command: ["bash", "-c", "rm -f /tmp/.X99-lock && Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/scraper.py"]
     profiles: ["scraper"]
 
   crawler:
@@ -36,7 +36,7 @@ services:
         context: .
         dockerfile: scraper.dockerfile
       env_file: .env
-      command: ["bash", "-c", "Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/crawler.py"]
+      command: ["bash", "-c", "rm -f /tmp/.X99-lock && Xvfb :99 -screen 0 1024x768x24 & export DISPLAY=:99 && python scrapers/crawler.py"]
       profiles: ["crawler"]
 
   writer:
