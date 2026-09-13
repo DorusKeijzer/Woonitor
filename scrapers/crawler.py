@@ -15,12 +15,10 @@ from time import sleep
 from config import (
     CRAWLER_THROTTLE_SPEED_MAX,
     CRAWLER_THROTTLE_SPEED_MIN,
-    CRAWLER_MAX_PAGES,
     CRAWLER_AREAS,
     CRAWLER_BASE_BACKOFF,
     CRAWLER_MAX_BACKOFF,
     CRAWLER_MAX_CONSECUTIVE_BLOCKS,
-    CRAWLER_EARLY_STOP_EMPTY_PAGES,
     CRAWLER_CONTENT_WAIT_MS,
     PLAYWRIGHT_HEADLESS,
 )
@@ -87,7 +85,7 @@ class Crawler:
     def __init__(self, area: str):
         self.area = area
         self.cleaned_area = area.lower().replace(" ", "-")
-        self.base_url = f'https://www.funda.nl/zoeken/koop/?selected_area=["{self.cleaned_area}"]&availability=["unavailable"]&search_result='
+        self.base_url = f'https://www.funda.nl/zoeken/koop?selected_area={self.cleaned_area}&availability=unavailable&sort=publish_date_sort_order_desc&search_result=' 
 
         self.name = f"Crawler-{area}-{uuid.uuid4().hex[:6]}"
         self.logger = logging.getLogger(self.name)
@@ -101,21 +99,19 @@ class Crawler:
     def crawl_links(self):
         page_number = 1
         consecutive_blocks = 0
-        consecutive_empty_pages = 0
 
         # One browser for the whole city instead of a fresh Chromium process
         # per page - that repeated cold-start was pure overhead.
         playwright = sync_playwright().start()
         browser = playwright.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
         try:
-            self._crawl_pages(browser, page_number, consecutive_blocks, consecutive_empty_pages)
+            self._crawl_pages(browser, page_number, consecutive_blocks)
         finally:
             browser.close()
             playwright.stop()
 
-    def _crawl_pages(self, browser, page_number, consecutive_blocks, consecutive_empty_pages):
+    def _crawl_pages(self, browser, page_number, consecutive_blocks):
         while True:
-
             self.logger.info(f"Crawling page {page_number}")
             url = self.base_url + str(page_number)
 
@@ -193,6 +189,10 @@ class Crawler:
                     urls = list(set([u for u in urls if u.startswith("/detail/")]))
                     self.logger.info(urls)
 
+                    if len(urls) == 0:
+                        self.logger.info("No listings on this page, city exhausted")
+                        return
+
                     for listing_url in urls:
                         # Dedup is handled entirely by the Lua script (a
                         # Redis set) and, downstream, the writer's
@@ -239,27 +239,12 @@ class Crawler:
 
             consecutive_blocks = 0
 
-            if i == 0:
-                consecutive_empty_pages += 1
-            else:
-                consecutive_empty_pages = 0
-
-            if consecutive_empty_pages >= CRAWLER_EARLY_STOP_EMPTY_PAGES:
-                self.logger.info(
-                    f"{consecutive_empty_pages} consecutive pages with no new listings, "
-                    f"assuming we've caught up on {self.area} - stopping early at page {page_number}"
-                )
-                return
-
             page_number += 1
             sleeptime = random() * (CRAWLER_THROTTLE_SPEED_MAX - CRAWLER_THROTTLE_SPEED_MIN) + CRAWLER_THROTTLE_SPEED_MIN
 
             self.logger.info(f"Sleeping {sleeptime} seconds.")
             sleep(sleeptime)
 
-            if page_number > CRAWLER_MAX_PAGES:
-                self.logger.info(f"Quitting because page number is {page_number}")
-                return
 
 
 

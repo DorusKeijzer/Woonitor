@@ -17,9 +17,6 @@ PLAYWRIGHT_HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "true").strip().lower() !
 CRAWLER_THROTTLE_SPEED_MIN = 5 #seconds
 CRAWLER_THROTTLE_SPEED_MAX = 10 #seconds
 
-# Funda caps search results at ~9990 listings / 166 pages of 60 results.
-CRAWLER_MAX_PAGES = 166
-
 # Cities the crawler cycles through in one run. Matches what the dashboard's
 # geojsons and the writer's city filters already assume.
 CRAWLER_AREAS = [
@@ -41,13 +38,6 @@ CRAWLER_MAX_CONSECUTIVE_BLOCKS = 5
 # Same idea as SCRAPER_CONTENT_WAIT_MS: wait for an actual listing link to
 # show up instead of a full networkidle that rarely resolves.
 CRAWLER_CONTENT_WAIT_MS = 10_000
-
-# Funda sorts search results newest-first, so once a page yields zero URLs we
-# haven't already seen, everything past it is old news too. After this many
-# CONSECUTIVE all-already-seen pages, stop this city early instead of walking
-# all CRAWLER_MAX_PAGES every run. Requires a few in a row (not just one) so a
-# single freak empty page doesn't cut a run short.
-CRAWLER_EARLY_STOP_EMPTY_PAGES = 3
 
 # --- SCRAPER --- #
 # Sleeping delay is picked uniformly between MIN and MAX:
