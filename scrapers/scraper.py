@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import redis
+import socket
 import uuid
 
 from datetime import datetime
@@ -31,11 +32,23 @@ logging.basicConfig(
 )
 
 # redis connection
+# socket_keepalive + short TCP keepalive probes so a long-idle brpop (nodes
+# can sit behind consumer-grade NAT, e.g. a home machine on a residential
+# ISP) doesn't end up blocked forever on a connection the NAT silently
+# dropped without sending a FIN/RST. health_check_interval makes redis-py
+# actively verify the connection on the socket-level layer too.
 r = redis.Redis(
     host=os.getenv("REDIS_HOST"),
     port=int(os.getenv("REDIS_PORT", "6379")),
     db=int(os.getenv("REDIS_DB", "0")),
-    password=os.getenv("REDIS_PASSWORD") or None
+    password=os.getenv("REDIS_PASSWORD") or None,
+    socket_keepalive=True,
+    socket_keepalive_options={
+        socket.TCP_KEEPIDLE: 60,
+        socket.TCP_KEEPINTVL: 30,
+        socket.TCP_KEEPCNT: 4,
+    },
+    health_check_interval=30,
 )
 
 # prometheus stuff
@@ -76,7 +89,19 @@ class Scraper:
         self._browser = self._playwright.chromium.launch(headless=PLAYWRIGHT_HEADLESS)
         try:
             while True:
-                _, raw = r.brpop('listing_queue')
+                try:
+                    popped = r.brpop('listing_queue', timeout=30)
+                except redis.exceptions.ConnectionError as e:
+                    # A NAT/firewall between here and redis can silently drop a
+                    # long-idle connection without a FIN/RST, leaving brpop
+                    # blocked forever on a socket that will never get data.
+                    # socket_keepalive above surfaces that as a ConnectionError
+                    # instead - just retry, redis-py reconnects on next call.
+                    self.logger.warning(f"Redis connection error, retrying: {e}")
+                    continue
+                if popped is None:
+                    continue
+                _, raw = popped
                 try:
                     url = json.loads(raw.decode()).get("url")
                     self.logger.info(f"Got URL: {url}")
